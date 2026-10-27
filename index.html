@@ -243,13 +243,29 @@
          TAB 3: INDIVIDUAL INSTRUCTOR SCHEDULE
          ========================================================================= -->
     <div data-tab-content="instructor" class="hidden space-y-4">
-      <!-- Instructor Selector -->
+      <!-- Instructor Searchable Combobox -->
       <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <label for="instructor-selector" class="text-xs uppercase font-bold text-slate-500 tracking-wider">Select Faculty:</label>
-          <select id="instructor-selector" class="px-3 py-1.5 text-sm font-bold bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[280px]">
-            <!-- Dynamically populated -->
-          </select>
+        <div class="flex items-center gap-3 flex-1 max-w-xl">
+          <label for="instructor-search-input" class="text-xs uppercase font-bold text-slate-500 tracking-wider whitespace-nowrap">Select Faculty:</label>
+          <div class="relative w-full" id="instructor-combobox-wrapper">
+            <div class="relative flex items-center">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none"></i>
+              <input id="instructor-search-input" type="text" autocomplete="off" placeholder="Type name to search (e.g. Polancos, Esplanada, Jacob)..." 
+                class="w-full pl-9 pr-10 py-2 text-sm font-semibold bg-slate-50 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white shadow-xs transition-all">
+              <button id="instructor-search-toggle" type="button" class="absolute right-2 p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors" title="Toggle full faculty list">
+                <i data-lucide="chevron-down" class="w-4 h-4 transition-transform duration-200" id="instructor-chevron"></i>
+              </button>
+            </div>
+
+            <!-- Autocomplete Suggestions Dropdown -->
+            <div id="instructor-suggestions-dropdown" class="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100 hidden">
+              <!-- Dynamically populated with recommended matching instructors -->
+            </div>
+          </div>
+        </div>
+
+        <div id="instructor-quick-badge" class="hidden sm:flex items-center gap-2 text-xs text-slate-500">
+          <!-- Active instructor badge -->
         </div>
       </div>
 

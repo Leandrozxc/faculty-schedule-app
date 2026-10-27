@@ -186,14 +186,8 @@ function setupEventListeners() {
     });
   }
 
-  // Instructor Selector
-  const instSelect = document.getElementById('instructor-selector');
-  if (instSelect) {
-    instSelect.addEventListener('change', (e) => {
-      state.selectedInstructor = e.target.value;
-      renderInstructorSchedule();
-    });
-  }
+  // Searchable Instructor Autocomplete Combobox
+  setupInstructorAutocomplete();
 }
 
 // Switch Active Tab
@@ -288,17 +282,210 @@ function populateDropdowns() {
   // Render the interactive room pills
   renderRoomPills();
 
-  // Instructors Dropdowns
-  const instSelect = document.getElementById('instructor-selector');
-  const masterInstSelect = document.getElementById('filter-master-instructor');
-  if (instSelect) {
-    instSelect.innerHTML = state.data.instructors.map(i => `<option value="${i.name}">${i.name} (${i.status})</option>`).join('');
-    instSelect.value = state.selectedInstructor || (state.data.instructors[0] ? state.data.instructors[0].name : '');
+  // Update Searchable Instructor Combobox initial value
+  const searchInput = document.getElementById('instructor-search-input');
+  if (searchInput && state.selectedInstructor) {
+    searchInput.value = state.selectedInstructor;
   }
+  updateInstructorQuickBadge();
+
+  // Master Filter Instructors Dropdown
+  const masterInstSelect = document.getElementById('filter-master-instructor');
   if (masterInstSelect) {
     masterInstSelect.innerHTML = `<option value="ALL">All Instructors (${state.data.instructors.length})</option>` +
       state.data.instructors.map(i => `<option value="${i.name}">${i.name}</option>`).join('');
   }
+}
+
+let activeSuggestionIndex = -1;
+
+function setupInstructorAutocomplete() {
+  const searchInput = document.getElementById('instructor-search-input');
+  const dropdown = document.getElementById('instructor-suggestions-dropdown');
+  const toggleBtn = document.getElementById('instructor-search-toggle');
+  const chevron = document.getElementById('instructor-chevron');
+  const wrapper = document.getElementById('instructor-combobox-wrapper');
+
+  if (!searchInput || !dropdown) return;
+
+  function openDropdown() {
+    dropdown.classList.remove('hidden');
+    if (chevron) chevron.classList.add('rotate-180');
+    renderInstructorSuggestions(searchInput.value);
+  }
+
+  function closeDropdown() {
+    dropdown.classList.add('hidden');
+    if (chevron) chevron.classList.remove('rotate-180');
+    activeSuggestionIndex = -1;
+  }
+
+  searchInput.addEventListener('input', (e) => {
+    openDropdown();
+    renderInstructorSuggestions(e.target.value);
+  });
+
+  searchInput.addEventListener('focus', () => {
+    openDropdown();
+    renderInstructorSuggestions(searchInput.value);
+  });
+
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (dropdown.classList.contains('hidden')) {
+        searchInput.focus();
+        openDropdown();
+        renderInstructorSuggestions('');
+      } else {
+        closeDropdown();
+      }
+    });
+  }
+
+  // Close on outside click
+  document.addEventListener('click', (e) => {
+    if (wrapper && !wrapper.contains(e.target)) {
+      closeDropdown();
+    }
+  });
+
+  // Keyboard navigation
+  searchInput.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('[data-suggestion-item]');
+    if (dropdown.classList.contains('hidden') || items.length === 0) {
+      if (e.key === 'ArrowDown') {
+        openDropdown();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeSuggestionIndex = (activeSuggestionIndex + 1) % items.length;
+      highlightSuggestion(items, activeSuggestionIndex);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeSuggestionIndex = (activeSuggestionIndex - 1 + items.length) % items.length;
+      highlightSuggestion(items, activeSuggestionIndex);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeSuggestionIndex >= 0 && activeSuggestionIndex < items.length) {
+        items[activeSuggestionIndex].click();
+      } else if (items.length > 0) {
+        items[0].click();
+      }
+    } else if (e.key === 'Escape') {
+      closeDropdown();
+    }
+  });
+}
+
+function highlightSuggestion(items, index) {
+  items.forEach((item, i) => {
+    if (i === index) {
+      item.classList.add('bg-blue-100/70', 'ring-1', 'ring-blue-400');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      item.classList.remove('bg-blue-100/70', 'ring-1', 'ring-blue-400');
+    }
+  });
+}
+
+function renderInstructorSuggestions(query = '') {
+  if (!state.data || !state.data.instructors) return;
+
+  const dropdown = document.getElementById('instructor-suggestions-dropdown');
+  if (!dropdown) return;
+
+  const q = String(query).toLowerCase().trim();
+  const matches = state.data.instructors.filter(i => {
+    if (!q) return true;
+    return i.name.toLowerCase().includes(q) || 
+           (i.status && i.status.toLowerCase().includes(q)) ||
+           (i.qualification && i.qualification.toLowerCase().includes(q));
+  });
+
+  if (matches.length === 0) {
+    dropdown.innerHTML = `
+      <div class="px-4 py-3 text-xs text-slate-400 text-center italic">
+        No faculty found matching "${query}". Try searching by last name (e.g. Polancos, Esplanada).
+      </div>
+    `;
+    return;
+  }
+
+  dropdown.innerHTML = matches.map((inst, index) => {
+    const isSelected = inst.name === state.selectedInstructor;
+    const color = getInstructorColor(inst.name);
+    return `
+      <div data-suggestion-item data-index="${index}" class="px-3.5 py-2.5 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors ${
+        isSelected ? 'bg-blue-50/70 font-semibold text-blue-900' : 'text-slate-800'
+      }" onclick="selectInstructorAutocomplete('${inst.name}')">
+        <div class="flex items-center gap-2.5 min-w-0 pr-2">
+          <span class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${color.ring}"></span>
+          <div class="truncate">
+            <div class="text-xs truncate ${isSelected ? 'font-bold text-blue-900' : 'font-semibold'}">
+              ${highlightMatchText(inst.name, q)}
+            </div>
+            <div class="text-[11px] text-slate-400 truncate">
+              ${inst.qualification || inst.status}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+            inst.status.includes('FT') ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+          }">
+            ${inst.status}
+          </span>
+          ${isSelected ? '<span class="text-blue-600 font-bold text-xs">✓</span>' : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function highlightMatchText(text, query) {
+  if (!query) return text;
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return text.replace(regex, '<mark class="bg-yellow-200 text-slate-900 rounded-xs px-0.5">$1</mark>');
+}
+
+window.selectInstructorAutocomplete = function(name) {
+  state.selectedInstructor = name;
+  const searchInput = document.getElementById('instructor-search-input');
+  if (searchInput) searchInput.value = name;
+
+  const dropdown = document.getElementById('instructor-suggestions-dropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+  const chevron = document.getElementById('instructor-chevron');
+  if (chevron) chevron.classList.remove('rotate-180');
+
+  updateInstructorQuickBadge();
+  renderInstructorSchedule();
+  initIcons();
+};
+
+function updateInstructorQuickBadge() {
+  const badgeEl = document.getElementById('instructor-quick-badge');
+  if (!badgeEl || !state.selectedInstructor || !state.data) return;
+
+  const faculty = state.data.instructors.find(i => i.name === state.selectedInstructor);
+  if (!faculty) {
+    badgeEl.innerHTML = '';
+    return;
+  }
+
+  const color = getInstructorColor(faculty.name);
+  badgeEl.innerHTML = `
+    <span class="text-xs text-slate-400">Selected:</span>
+    <span class="px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 border"
+          style="background-color: ${color.badgeBg}; color: ${color.badgeText}; border-color: ${color.border}">
+      <span class="w-2 h-2 rounded-full" style="background-color: ${color.ring}"></span>
+      <span class="truncate max-w-[150px]">${faculty.name.split(',')[0]}</span>
+    </span>
+  `;
 }
 
 // Render Room Pills with real-time search & conflict alerts
@@ -909,8 +1096,9 @@ window.filterByInstructor = function(name) {
 
 window.viewInstructor = function(name) {
   state.selectedInstructor = name;
-  const instSelect = document.getElementById('instructor-selector');
-  if (instSelect) instSelect.value = name;
+  const searchInput = document.getElementById('instructor-search-input');
+  if (searchInput) searchInput.value = name;
+  updateInstructorQuickBadge();
   switchTab('instructor');
 };
 
