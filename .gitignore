@@ -1,4 +1,25 @@
+# OS & Editor files
 .DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Logs & Environment
 *.log
+.env
+.env.*
+
+# Dependencies & Build outputs
 node_modules/
 .vercel/
+.next/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# AI Agent skills & local design-system artifacts
+.agents/
+.gemini/
+design-system/
