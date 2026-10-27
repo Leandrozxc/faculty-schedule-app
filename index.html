@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CEA Faculty Timetable & Room Occupancy Portal</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- SheetJS (Excel Parser) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    @media print {
+      body { background: white !important; }
+      header, nav, #quick-room-pills, .no-print, button, #upload-modal { display: none !important; }
+      .print-full { width: 100% !important; border: none !important; box-shadow: none !important; }
+      table { page-break-inside: auto; }
+      tr { page-break-inside: avoid; page-break-after: auto; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col font-sans antialiased">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black shadow-md shadow-blue-200">
+          <i data-lucide="calendar" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+            CEA Faculty Schedule & Room Portal
+          </h1>
+          <p class="text-xs text-slate-500 flex items-center gap-2">
+            <span id="header-dept-title">Engineering Mathematics, Physics & Chemistry</span>
+            <span>•</span>
+            <span id="header-period-tag" class="font-medium text-blue-600">First Semester 2026-2027</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2.5">
+        <button id="reset-sample-btn" type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors flex items-center gap-1.5" title="Reset to default CEA sample dataset">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">Reset Sample</span>
+        </button>
+
+        <button id="export-csv-btn" type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors flex items-center gap-1.5">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">Export CSV</span>
+        </button>
+
+        <button id="print-schedule-btn" type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors flex items-center gap-1.5">
+          <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">Print</span>
+        </button>
+
+        <button id="open-upload-btn" type="button" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-200 flex items-center gap-1.5 transition-all">
+          <i data-lucide="file-up" class="w-4 h-4"></i>
+          <span>Upload Excel (.xlsx)</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Metric Badges -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-5 w-full">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3.5">
+        <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+          <i data-lucide="users" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-xs text-slate-400 font-medium">Instructors</div>
+          <div id="stat-instructors" class="text-xl font-bold text-slate-900">-</div>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3.5">
+        <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+          <i data-lucide="book-open" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-xs text-slate-400 font-medium">Class Sessions</div>
+          <div id="stat-sessions" class="text-xl font-bold text-slate-900">-</div>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3.5">
+        <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+          <i data-lucide="building" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-xs text-slate-400 font-medium">Rooms Active</div>
+          <div id="stat-rooms" class="text-xl font-bold text-slate-900">-</div>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3.5 cursor-pointer hover:border-red-300 transition-colors" onclick="switchTab('rooms')">
+        <div class="w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center font-bold">
+          <i data-lucide="alert-circle" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-xs text-slate-400 font-medium">Room Conflicts</div>
+          <div id="stat-conflicts" class="text-xl font-bold text-red-600">-</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Navigation Tabs -->
+  <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-5 w-full">
+    <div class="flex border-b border-slate-200 space-x-1 sm:space-x-3 text-sm font-semibold overflow-x-auto pb-px">
+      <button data-tab-target="rooms" type="button" class="px-4 py-2.5 border-b-2 border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-lg transition-all flex items-center gap-2 whitespace-nowrap">
+        <i data-lucide="door-open" class="w-4 h-4"></i>
+        <span>Room Occupancy</span>
+      </button>
+
+      <button data-tab-target="master" type="button" class="px-4 py-2.5 border-b-2 border-transparent text-slate-600 hover:bg-slate-50 rounded-t-lg transition-all flex items-center gap-2 whitespace-nowrap">
+        <i data-lucide="calendar-range" class="w-4 h-4"></i>
+        <span>Master Weekly Schedule</span>
+      </button>
+
+      <button data-tab-target="instructor" type="button" class="px-4 py-2.5 border-b-2 border-transparent text-slate-600 hover:bg-slate-50 rounded-t-lg transition-all flex items-center gap-2 whitespace-nowrap">
+        <i data-lucide="user-check" class="w-4 h-4"></i>
+        <span>Instructor Timetables</span>
+      </button>
+
+      <button data-tab-target="roster" type="button" class="px-4 py-2.5 border-b-2 border-transparent text-slate-600 hover:bg-slate-50 rounded-t-lg transition-all flex items-center gap-2 whitespace-nowrap">
+        <i data-lucide="table" class="w-4 h-4"></i>
+        <span>Faculty Summary (FLR-001)</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content Area -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 w-full flex-1">
+
+    <!-- =========================================================================
+         TAB 1: ROOM OCCUPANCY & CONFLICT CHECKER
+         ========================================================================= -->
+    <div data-tab-content="rooms" class="space-y-4">
+      <!-- Room Selector Bar (Search + Interactive Pills with Conflict Badges) -->
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs uppercase font-bold text-slate-500 tracking-wider">Select Room:</span>
+            <span id="room-count-badge" class="px-2 py-0.5 text-xs bg-slate-100 text-slate-600 font-semibold rounded-full"></span>
+          </div>
+
+          <!-- Room Quick Search Input -->
+          <div class="relative w-full sm:w-72">
+            <input id="room-search-input" type="text" placeholder="Type to filter rooms (e.g. SAL, 246, BGANNEX)..." class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
+          </div>
+        </div>
+
+        <!-- Room Pills Container -->
+        <div class="flex items-center gap-1.5 flex-wrap max-h-40 overflow-y-auto pr-1" id="room-pills-container">
+          <!-- Dynamically populated with all rooms + conflict badges -->
+        </div>
+      </div>
+
+      <!-- Specific Room Stats -->
+      <div id="room-specific-stats"></div>
+
+      <!-- Room Conflict Alert Box -->
+      <div id="room-conflict-alert-box" class="hidden"></div>
+
+      <!-- Room Timetable Matrix -->
+      <div id="room-timetable-container">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- =========================================================================
+         TAB 2: MASTER WEEKLY SCHEDULE
+         ========================================================================= -->
+    <div data-tab-content="master" class="hidden space-y-4">
+      <!-- Master Filters Bar -->
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <!-- Day Filter -->
+          <select id="filter-master-day" class="px-3 py-1.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg text-slate-700">
+            <option value="ALL">All Days (Mon-Sat)</option>
+            <option value="MONDAY">Monday</option>
+            <option value="TUESDAY">Tuesday</option>
+            <option value="WEDNESDAY">Wednesday</option>
+            <option value="THURSDAY">Thursday</option>
+            <option value="FRIDAY">Friday</option>
+            <option value="SATURDAY">Saturday</option>
+          </select>
+
+          <!-- Room Filter -->
+          <select id="filter-master-room" class="px-3 py-1.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg text-slate-700">
+            <!-- Populated dynamically -->
+          </select>
+
+          <!-- Instructor Filter -->
+          <select id="filter-master-instructor" class="px-3 py-1.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg text-slate-700 max-w-[220px]">
+            <!-- Populated dynamically -->
+          </select>
+
+          <!-- Search Input -->
+          <div class="relative">
+            <input id="filter-master-search" type="text" placeholder="Search subject, section, room..." class="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 w-48 sm:w-64">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <span id="master-results-count" class="text-xs text-slate-500 font-medium"></span>
+          
+          <!-- View Toggle (Grid / Table) -->
+          <div class="flex items-center border border-slate-200 rounded-lg p-0.5 bg-slate-100">
+            <button id="toggle-view-grid" type="button" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-600 text-white shadow-xs">
+              Grid
+            </button>
+            <button id="toggle-view-table" type="button" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-slate-700">
+              Table
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Instructor Color Legend -->
+      <div id="instructor-legend-bar"></div>
+
+      <!-- Master Timetable Container -->
+      <div id="master-schedule-container">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- =========================================================================
+         TAB 3: INDIVIDUAL INSTRUCTOR SCHEDULE
+         ========================================================================= -->
+    <div data-tab-content="instructor" class="hidden space-y-4">
+      <!-- Instructor Selector -->
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <label for="instructor-selector" class="text-xs uppercase font-bold text-slate-500 tracking-wider">Select Faculty:</label>
+          <select id="instructor-selector" class="px-3 py-1.5 text-sm font-bold bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[280px]">
+            <!-- Dynamically populated -->
+          </select>
+        </div>
+      </div>
+
+      <!-- Instructor Profile Header Card -->
+      <div id="instructor-profile-card"></div>
+
+      <!-- Timetable -->
+      <div id="instructor-timetable-container">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- =========================================================================
+         TAB 4: FACULTY SUMMARY ROSTER
+         ========================================================================= -->
+    <div data-tab-content="roster" class="hidden space-y-4">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-bold text-slate-800">Faculty Members & Teaching Loads (FLR-001)</h2>
+          <p class="text-xs text-slate-500">Extracted from teaching load assignment summaries</p>
+        </div>
+      </div>
+
+      <div id="roster-container">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Upload Modal -->
+  <div id="upload-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+          </div>
+          <h3 class="font-bold text-slate-900 text-base">Upload Schedule Excel File</h3>
+        </div>
+        <button id="close-upload-btn" type="button" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="mt-4">
+        <p class="text-xs text-slate-500 mb-3">
+          Upload any college faculty timetable workbook (<code class="bg-slate-100 px-1 py-0.5 rounded text-blue-600">.xlsx</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-blue-600">.xls</code>, or <code class="bg-slate-100 px-1 py-0.5 rounded text-blue-600">.csv</code>). The app will automatically scan all sheets, filter out administrative forms (FLR-003, FLR-005), and parse the individual schedule grids.
+        </p>
+
+        <!-- Drop Zone -->
+        <div id="drop-zone" class="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-8 text-center bg-slate-50/50 cursor-pointer transition-all">
+          <i data-lucide="cloud-upload" class="w-10 h-10 text-blue-500 mx-auto mb-2"></i>
+          <p class="text-sm font-semibold text-slate-700">Drag & drop your Excel file here</p>
+          <p class="text-xs text-slate-400 mt-1">or click to browse your computer</p>
+          <input type="file" id="excel-file-input" accept=".xlsx,.xls,.csv" class="hidden">
+        </div>
+
+        <div id="upload-status" class="mt-3 text-xs font-semibold text-center hidden"></div>
+      </div>
+
+      <div class="mt-5 flex justify-end gap-2 pt-3 border-t border-slate-100">
+        <button type="button" onclick="document.getElementById('excel-file-input').click()" class="px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm">
+          Browse File
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="sample-data.js"></script>
+  <script src="parser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
