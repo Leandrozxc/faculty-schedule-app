@@ -114,34 +114,35 @@
     }
   </style>
 </head>
-<body class="bg-[#F1F5F9] min-h-screen text-slate-900 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
+<body class="bg-[#F1F5F9] min-h-screen text-slate-900 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white overflow-x-hidden">
 
   <!-- =========================================================================
        ARCHITECTURAL INSTITUTIONAL MASTHEAD (SWISS GRID HEADER)
        ========================================================================= -->
-  <header class="bg-[#0F172A] text-white border-b border-slate-800 sticky top-0 z-40">
-    <div class="max-w-[1520px] mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between gap-4">
+  <header class="bg-[#0F172A] text-white border-b border-slate-800 sticky top-0 z-40 w-full">
+    <div class="max-w-[1520px] mx-auto px-2.5 sm:px-6 lg:px-8 min-h-12 py-1.5 sm:py-0 flex items-center justify-between gap-2 sm:gap-4">
       <!-- Brand / Department Identity -->
-      <div class="flex items-center gap-3 min-w-0">
-        <div class="px-2 py-0.5 bg-blue-600 text-white font-mono text-xs font-bold tracking-wider uppercase shrink-0">
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div class="px-1.5 sm:px-2 py-0.5 bg-blue-600 text-white font-mono text-[11px] sm:text-xs font-bold tracking-wider uppercase shrink-0">
           CEA
         </div>
-        <div class="flex items-center gap-2.5 min-w-0">
-          <h1 class="text-[13px] sm:text-sm font-semibold tracking-tight text-white whitespace-nowrap">
-            Academic Timetable &amp; Room Registry
+        <div class="flex items-center gap-2 min-w-0">
+          <h1 class="text-xs sm:text-sm font-semibold tracking-tight text-white truncate">
+            <span class="sm:hidden">Schedule Lookup</span>
+            <span class="hidden sm:inline">Academic Timetable &amp; Room Registry</span>
           </h1>
           <span class="hidden md:inline text-slate-600" aria-hidden="true">|</span>
           <span id="header-dept-title" class="hidden lg:inline text-xs text-slate-400 truncate">
             Engineering Mathematics, Physics &amp; Chemistry
           </span>
-          <span id="header-period-tag" class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono font-medium uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700 shrink-0">
+          <span id="header-period-tag" class="hidden md:inline-block px-1.5 py-0.5 text-[10px] font-mono font-medium uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700 shrink-0">
             1st Sem 2026–2027
           </span>
         </div>
       </div>
 
       <!-- Inline Architectural Telemetry + System Actions -->
-      <div class="flex items-center gap-4 shrink-0">
+      <div class="flex items-center gap-2 sm:gap-4 shrink-0">
         <!-- Typographic Telemetry Strip -->
         <div aria-label="Department Summary Metrics" class="hidden xl:flex items-center divide-x divide-slate-800 text-xs font-mono">
           <div class="px-3 flex items-baseline gap-1.5">
@@ -163,25 +164,26 @@
         </div>
 
         <!-- Action Controls -->
-        <div class="flex items-center gap-1.5">
-          <button id="reset-sample-btn" type="button" class="h-7 px-2.5 text-[11px] font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400" title="Reset to default CEA sample dataset">
-            <i data-lucide="rotate-ccw" class="w-3 h-3" aria-hidden="true"></i>
+        <div class="flex items-center gap-1 sm:gap-1.5">
+          <button id="reset-sample-btn" type="button" class="h-7 px-2 sm:px-2.5 text-[11px] font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400" title="Reset to default CEA sample dataset">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 sm:w-3 sm:h-3" aria-hidden="true"></i>
             <span class="hidden sm:inline">Reset</span>
           </button>
 
-          <button id="export-csv-btn" type="button" class="h-7 px-2.5 text-[11px] font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400" title="Export schedule to CSV">
-            <i data-lucide="download" class="w-3 h-3" aria-hidden="true"></i>
+          <button id="export-csv-btn" type="button" class="h-7 px-2 sm:px-2.5 text-[11px] font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400" title="Export schedule to CSV">
+            <i data-lucide="download" class="w-3.5 h-3.5 sm:w-3 sm:h-3" aria-hidden="true"></i>
             <span class="hidden sm:inline">CSV</span>
           </button>
 
-          <button id="print-schedule-btn" type="button" class="h-7 px-2.5 text-[11px] font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400" title="Print current schedule view">
+          <button id="print-schedule-btn" type="button" class="hidden sm:flex h-7 px-2.5 text-[11px] font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400" title="Print current schedule view">
             <i data-lucide="printer" class="w-3 h-3" aria-hidden="true"></i>
             <span class="hidden sm:inline">Print</span>
           </button>
 
-          <button id="open-upload-btn" type="button" class="h-7 px-3 text-[11px] font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+          <button id="open-upload-btn" type="button" class="h-7 px-2.5 sm:px-3 text-[11px] font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
             <i data-lucide="upload" class="w-3 h-3" aria-hidden="true"></i>
-            <span>Import .xlsx</span>
+            <span class="sm:hidden">Import</span>
+            <span class="hidden sm:inline">Import .xlsx</span>
           </button>
         </div>
       </div>
@@ -191,27 +193,31 @@
   <!-- =========================================================================
        FLUSH ARCHITECTURAL NAVIGATION BAR
        ========================================================================= -->
-  <nav aria-label="Schedule Views" class="bg-white border-b border-slate-300 sticky top-12 z-30">
-    <div class="max-w-[1520px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between overflow-x-auto no-scrollbar">
-      <div role="tablist" class="flex items-center min-w-max">
-        <button data-tab-target="instructor" role="tab" aria-selected="true" type="button" class="nav-tab-btn h-10 px-4 text-xs font-semibold text-slate-900 border-b-2 border-blue-600 bg-slate-50/70 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:bg-slate-100">
-          <span class="font-mono text-[10px] text-blue-600 font-semibold">01</span>
-          <span>Instructor Timetables</span>
+  <nav aria-label="Schedule Views" class="bg-white border-b border-slate-300 sticky top-12 z-30 w-full">
+    <div class="max-w-[1520px] mx-auto px-0 sm:px-6 lg:px-8 flex items-center justify-between">
+      <div role="tablist" class="grid grid-cols-4 sm:flex sm:items-center w-full sm:w-auto">
+        <button data-tab-target="instructor" role="tab" aria-selected="true" type="button" class="nav-tab-btn h-10 px-1 sm:px-4 text-[10.5px] sm:text-xs font-semibold text-slate-900 border-b-2 border-blue-600 bg-slate-50/70 transition-colors flex items-center justify-center sm:justify-start gap-1 sm:gap-2 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-100">
+          <span class="font-mono text-[9.5px] sm:text-[10px] text-blue-600 font-semibold">01</span>
+          <span class="sm:hidden truncate">Instructor</span>
+          <span class="hidden sm:inline">Instructor Timetables</span>
         </button>
 
-        <button data-tab-target="master" role="tab" aria-selected="false" type="button" class="nav-tab-btn h-10 px-4 text-xs font-medium text-slate-500 hover:text-slate-900 border-b-2 border-transparent hover:bg-slate-50/60 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:bg-slate-100">
-          <span class="font-mono text-[10px] text-slate-400">02</span>
-          <span>Master Weekly Schedule</span>
+        <button data-tab-target="master" role="tab" aria-selected="false" type="button" class="nav-tab-btn h-10 px-1 sm:px-4 text-[10.5px] sm:text-xs font-medium text-slate-500 hover:text-slate-900 border-b-2 border-transparent hover:bg-slate-50/60 transition-colors flex items-center justify-center sm:justify-start gap-1 sm:gap-2 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-100">
+          <span class="font-mono text-[9.5px] sm:text-[10px] text-slate-400">02</span>
+          <span class="sm:hidden truncate">Master</span>
+          <span class="hidden sm:inline">Master Weekly Schedule</span>
         </button>
 
-        <button data-tab-target="rooms" role="tab" aria-selected="false" type="button" class="nav-tab-btn h-10 px-4 text-xs font-medium text-slate-500 hover:text-slate-900 border-b-2 border-transparent hover:bg-slate-50/60 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:bg-slate-100">
-          <span class="font-mono text-[10px] text-slate-400">03</span>
-          <span>Room Occupancy</span>
+        <button data-tab-target="rooms" role="tab" aria-selected="false" type="button" class="nav-tab-btn h-10 px-1 sm:px-4 text-[10.5px] sm:text-xs font-medium text-slate-500 hover:text-slate-900 border-b-2 border-transparent hover:bg-slate-50/60 transition-colors flex items-center justify-center sm:justify-start gap-1 sm:gap-2 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-100">
+          <span class="font-mono text-[9.5px] sm:text-[10px] text-slate-400">03</span>
+          <span class="sm:hidden truncate">Rooms</span>
+          <span class="hidden sm:inline">Room Occupancy</span>
         </button>
 
-        <button data-tab-target="roster" role="tab" aria-selected="false" type="button" class="nav-tab-btn h-10 px-4 text-xs font-medium text-slate-500 hover:text-slate-900 border-b-2 border-transparent hover:bg-slate-50/60 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:bg-slate-100">
-          <span class="font-mono text-[10px] text-slate-400">04</span>
-          <span>Faculty Summary (FLR-001)</span>
+        <button data-tab-target="roster" role="tab" aria-selected="false" type="button" class="nav-tab-btn h-10 px-1 sm:px-4 text-[10.5px] sm:text-xs font-medium text-slate-500 hover:text-slate-900 border-b-2 border-transparent hover:bg-slate-50/60 transition-colors flex items-center justify-center sm:justify-start gap-1 sm:gap-2 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-100">
+          <span class="font-mono text-[9.5px] sm:text-[10px] text-slate-400">04</span>
+          <span class="sm:hidden truncate">Faculty</span>
+          <span class="hidden sm:inline">Faculty Summary (FLR-001)</span>
         </button>
       </div>
 
@@ -226,18 +232,18 @@
   <!-- =========================================================================
        MAIN WORKSPACE
        ========================================================================= -->
-  <main class="max-w-[1520px] mx-auto px-4 sm:px-6 lg:px-8 py-5 w-full flex-1">
+  <main class="max-w-[1520px] mx-auto px-2.5 sm:px-6 lg:px-8 py-3 sm:py-5 w-full min-w-0 overflow-x-hidden flex-1">
 
     <!-- =========================================================================
          TAB 3: ROOM OCCUPANCY & CONFLICT CHECKER
          ========================================================================= -->
-    <div data-tab-content="rooms" class="hidden space-y-4">
+    <div data-tab-content="rooms" class="hidden space-y-3 sm:space-y-4 min-w-0 max-w-full overflow-x-hidden">
       <!-- Swiss Room Index & Search Bar -->
-      <div class="bg-white border border-slate-300">
-        <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-          <div class="flex items-center gap-2.5">
+      <div class="bg-white border border-slate-300 min-w-0 max-w-full overflow-hidden">
+        <div class="px-3 sm:px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+          <div class="flex items-center gap-2">
             <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-700">Room Index</span>
-            <span id="room-count-badge" class="px-1.5 py-0.5 text-[11px] bg-slate-200/80 text-slate-700 font-mono font-semibold tabular-nums"></span>
+            <span id="room-count-badge" class="px-1.5 py-0.5 text-[10.5px] bg-slate-200/80 text-slate-700 font-mono font-semibold tabular-nums"></span>
           </div>
 
           <div class="relative w-full sm:w-72 flex items-center">
@@ -246,19 +252,19 @@
           </div>
         </div>
 
-        <div class="p-3 flex items-center gap-1.5 flex-wrap max-h-36 overflow-y-auto" id="room-pills-container">
+        <div class="p-2.5 sm:p-3 flex items-center gap-1.5 flex-nowrap sm:flex-wrap overflow-x-auto sm:overflow-y-auto no-scrollbar sm:max-h-36 w-full" id="room-pills-container">
           <!-- Dynamically populated with all rooms + conflict badges -->
         </div>
       </div>
 
       <!-- Specific Room Stats -->
-      <div id="room-specific-stats"></div>
+      <div id="room-specific-stats" class="min-w-0 max-w-full"></div>
 
       <!-- Room Conflict Alert Box -->
-      <div id="room-conflict-alert-box" class="hidden"></div>
+      <div id="room-conflict-alert-box" class="hidden min-w-0 max-w-full"></div>
 
       <!-- Room Timetable Matrix -->
-      <div id="room-timetable-container">
+      <div id="room-timetable-container" class="min-w-0 max-w-full">
         <!-- Rendered by JS -->
       </div>
     </div>
@@ -266,15 +272,15 @@
     <!-- =========================================================================
          TAB 2: MASTER WEEKLY SCHEDULE
          ========================================================================= -->
-    <div data-tab-content="master" class="hidden space-y-3">
+    <div data-tab-content="master" class="hidden space-y-3 min-w-0 max-w-full overflow-x-hidden">
       <!-- Unified Architectural Command & Filter Ledger -->
-      <div class="bg-white border border-slate-300">
+      <div class="bg-white border border-slate-300 min-w-0 max-w-full overflow-hidden">
         <!-- Top Row: Segmented Controls & Filters -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 border-b border-slate-200">
+        <div class="grid grid-cols-2 lg:grid-cols-12 divide-y divide-x divide-slate-200 border-b border-slate-200">
           <!-- Day Filter Cell -->
-          <div class="lg:col-span-2 px-3 py-1.5 flex flex-col justify-center">
-            <label for="filter-master-day" class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400">Day of Week</label>
-            <select id="filter-master-day" class="swiss-select w-full h-6 pr-5 text-xs font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer">
+          <div class="col-span-1 lg:col-span-2 px-2 sm:px-3 py-1.5 flex flex-col justify-center min-w-0">
+            <label for="filter-master-day" class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400 truncate">Day of Week</label>
+            <select id="filter-master-day" class="swiss-select w-full h-6 pr-5 text-xs font-semibold text-slate-800 bg-transparent truncate focus:outline-none cursor-pointer">
               <option value="ALL">All Days (Mon–Sat)</option>
               <option value="MONDAY">Monday</option>
               <option value="TUESDAY">Tuesday</option>
@@ -286,9 +292,9 @@
           </div>
 
           <!-- Time Period Filter Cell -->
-          <div class="lg:col-span-2 px-3 py-1.5 flex flex-col justify-center">
-            <label for="filter-master-time" class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400">Time Period</label>
-            <select id="filter-master-time" class="swiss-select w-full h-6 pr-5 text-xs font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer">
+          <div class="col-span-1 lg:col-span-2 px-2 sm:px-3 py-1.5 flex flex-col justify-center min-w-0">
+            <label for="filter-master-time" class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400 truncate">Time Period</label>
+            <select id="filter-master-time" class="swiss-select w-full h-6 pr-5 text-xs font-semibold text-slate-800 bg-transparent truncate focus:outline-none cursor-pointer">
               <option value="ALL">All 9 Time Slots</option>
               <option value="0">P1 · 07:30 – 09:00 AM</option>
               <option value="1">P2 · 09:00 – 10:30 AM</option>
@@ -303,26 +309,26 @@
           </div>
 
           <!-- Room Filter Cell -->
-          <div class="lg:col-span-2 px-3 py-1.5 flex flex-col justify-center">
-            <label for="filter-master-room" class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400">Room Assignment</label>
-            <select id="filter-master-room" class="swiss-select w-full h-6 pr-5 text-xs font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer">
+          <div class="col-span-1 lg:col-span-2 px-2 sm:px-3 py-1.5 flex flex-col justify-center min-w-0">
+            <label for="filter-master-room" class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400 truncate">Room Assignment</label>
+            <select id="filter-master-room" class="swiss-select w-full h-6 pr-5 text-xs font-semibold text-slate-800 bg-transparent truncate focus:outline-none cursor-pointer">
               <!-- Populated dynamically -->
             </select>
           </div>
 
           <!-- Instructor Filter Cell -->
-          <div class="lg:col-span-2 px-3 py-1.5 flex flex-col justify-center">
-            <label for="filter-master-instructor" class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400">Faculty Member</label>
+          <div class="col-span-1 lg:col-span-2 px-2 sm:px-3 py-1.5 flex flex-col justify-center min-w-0">
+            <label for="filter-master-instructor" class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400 truncate">Faculty Member</label>
             <select id="filter-master-instructor" class="swiss-select w-full h-6 pr-5 text-xs font-semibold text-slate-800 bg-transparent truncate focus:outline-none cursor-pointer">
               <!-- Populated dynamically -->
             </select>
           </div>
 
           <!-- Search Filter Cell -->
-          <div class="lg:col-span-2 px-3 py-1.5 flex flex-col justify-center relative">
-            <label for="filter-master-search" class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400">Quick Search</label>
-            <div class="relative flex items-center">
-              <input id="filter-master-search" type="text" placeholder="Subject, section, room..." class="w-full h-6 pr-6 text-xs font-medium text-slate-900 placeholder:text-slate-400 bg-transparent focus:outline-none">
+          <div class="col-span-1 lg:col-span-2 px-2 sm:px-3 py-1.5 flex flex-col justify-center relative min-w-0">
+            <label for="filter-master-search" class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400 truncate">Quick Search</label>
+            <div class="relative flex items-center min-w-0">
+              <input id="filter-master-search" type="text" placeholder="Subject, section, room..." class="w-full h-6 pr-6 text-xs font-medium text-slate-900 placeholder:text-slate-400 bg-transparent focus:outline-none min-w-0">
               <button id="master-search-clear" type="button" class="hidden absolute right-0 text-slate-400 hover:text-slate-700 cursor-pointer" title="Clear search" aria-label="Clear search">
                 <i data-lucide="x" class="w-3.5 h-3.5" aria-hidden="true"></i>
               </button>
@@ -330,22 +336,22 @@
           </div>
 
           <!-- Count & View Switcher Cell -->
-          <div class="lg:col-span-2 px-3 py-1.5 bg-slate-50/70 flex items-center justify-between gap-2">
+          <div class="col-span-1 lg:col-span-2 px-2 sm:px-3 py-1.5 bg-slate-50/70 flex items-center justify-between gap-1 sm:gap-2 min-w-0">
             <div class="min-w-0">
-              <div class="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400">Matched</div>
-              <div id="master-results-count" class="text-xs font-mono font-bold text-slate-900 tabular-nums truncate" aria-live="polite">-</div>
+              <div class="text-[9.5px] sm:text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400 truncate">Matched</div>
+              <div id="master-results-count" class="text-[11px] sm:text-xs font-mono font-bold text-slate-900 tabular-nums truncate" aria-live="polite">-</div>
             </div>
 
-            <div class="flex items-center gap-1.5 shrink-0">
-              <button id="master-reset-filters" type="button" class="hidden h-7 px-2 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 items-center gap-1 transition-colors cursor-pointer" title="Reset all active filters">
+            <div class="flex items-center gap-1 shrink-0">
+              <button id="master-reset-filters" type="button" class="hidden h-6 sm:h-7 px-1.5 sm:px-2 text-[10px] sm:text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 items-center gap-1 transition-colors cursor-pointer" title="Reset all active filters">
                 <span>Reset</span>
               </button>
 
               <div role="group" aria-label="Schedule display mode" class="inline-flex border border-slate-300 bg-slate-200/70 p-0.5">
-                <button id="toggle-view-grid" type="button" aria-pressed="true" class="h-6 px-2.5 text-[11px] font-semibold bg-slate-900 text-white transition-colors cursor-pointer">
+                <button id="toggle-view-grid" type="button" aria-pressed="true" class="h-5 sm:h-6 px-1.5 sm:px-2 text-[10px] sm:text-[11px] font-semibold bg-slate-900 text-white transition-colors cursor-pointer">
                   Matrix
                 </button>
-                <button id="toggle-view-table" type="button" aria-pressed="false" class="h-6 px-2.5 text-[11px] font-medium text-slate-600 hover:text-slate-900 transition-colors cursor-pointer">
+                <button id="toggle-view-table" type="button" aria-pressed="false" class="h-5 sm:h-6 px-1.5 sm:px-2 text-[10px] sm:text-[11px] font-medium text-slate-600 hover:text-slate-900 transition-colors cursor-pointer">
                   List
                 </button>
               </div>
@@ -354,14 +360,14 @@
         </div>
 
         <!-- Time Period Quick-Jump / Filter Strip (Rendered by JS) -->
-        <div id="master-time-strip" class="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto no-scrollbar"></div>
+        <div id="master-time-strip" class="px-2.5 sm:px-3 py-2 bg-slate-50 border-b border-slate-200 min-w-0 max-w-full overflow-hidden"></div>
 
         <!-- Instructor Color Guide Bar (Integrated into Command Ledger) -->
-        <div id="instructor-legend-bar"></div>
+        <div id="instructor-legend-bar" class="px-2.5 sm:px-3 py-2 min-w-0 max-w-full overflow-hidden"></div>
       </div>
 
       <!-- Master Timetable Container -->
-      <div id="master-schedule-container">
+      <div id="master-schedule-container" class="min-w-0 max-w-full">
         <!-- Rendered by JS -->
       </div>
     </div>
@@ -369,21 +375,21 @@
     <!-- =========================================================================
          TAB 1 (MAIN SCREEN): INDIVIDUAL INSTRUCTOR SCHEDULE LOOKUP
          ========================================================================= -->
-    <div data-tab-content="instructor" class="space-y-4">
+    <div data-tab-content="instructor" class="space-y-3 sm:space-y-4 min-w-0 max-w-full overflow-x-hidden">
       <!-- Student-First Instructor Search & Quick Directory Ledger -->
-      <div class="bg-white border border-slate-300 shadow-2xs">
-        <div class="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
-          <div class="flex flex-col sm:flex-row sm:items-center gap-3 flex-1 min-w-[280px] max-w-2xl">
-            <label for="instructor-search-input" class="flex flex-col shrink-0">
+      <div class="bg-white border border-slate-300 shadow-2xs min-w-0 max-w-full overflow-hidden">
+        <div class="p-3 sm:p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2.5 sm:gap-4 min-w-0">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 flex-1 min-w-0 max-w-2xl w-full">
+            <label for="instructor-search-input" class="flex items-center justify-between sm:flex-col sm:items-start shrink-0 min-w-0">
               <span class="text-[11px] font-mono uppercase font-bold text-slate-900 tracking-wider">Find Instructor Schedule</span>
-              <span class="text-[11px] text-slate-500">Search by surname, name, or subject</span>
+              <span class="hidden sm:inline text-[11px] text-slate-500">Search by surname or subject</span>
             </label>
-            <div class="relative flex-1" id="instructor-combobox-wrapper">
-              <div class="relative flex items-center">
+            <div class="relative flex-1 w-full min-w-0" id="instructor-combobox-wrapper">
+              <div class="relative flex items-center min-w-0">
                 <i data-lucide="search" class="w-4 h-4 text-blue-600 absolute left-3 pointer-events-none"></i>
-                <input id="instructor-search-input" type="text" autocomplete="off" placeholder="Type instructor name or subject (e.g. Polancos, Esplanada, MATH 138)..." 
-                  class="w-full h-10 pl-9 pr-16 text-xs sm:text-sm font-semibold bg-slate-50 border border-slate-300 text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 focus:bg-white transition-all">
-                <div class="absolute right-2 flex items-center gap-0.5">
+                <input id="instructor-search-input" type="text" autocomplete="off" placeholder="Search instructor or course (e.g. Polancos, MATH 138)..." 
+                  class="w-full h-10 pl-9 pr-14 sm:pr-16 text-xs sm:text-sm font-semibold bg-slate-50 border border-slate-300 text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 focus:bg-white transition-all min-w-0">
+                <div class="absolute right-1.5 sm:right-2 flex items-center gap-0.5">
                   <button id="instructor-search-clear" type="button" class="p-1 text-slate-400 hover:text-slate-700 hidden cursor-pointer" title="Clear search and type another name">
                     <i data-lucide="x" class="w-4 h-4"></i>
                   </button>
@@ -403,32 +409,32 @@
           </div>
         </div>
 
-        <!-- Quick Faculty Directory Strip for Instant 1-Click Switching -->
-        <div class="px-4 py-2.5 bg-slate-50/80 flex items-center gap-1.5 flex-wrap" id="instructor-directory-pills">
+        <!-- Quick Faculty Directory Strip for Instant 1-Click Switching (Scrollable single row on mobile, wrapped on desktop) -->
+        <div class="px-2.5 sm:px-4 py-2 bg-slate-50/80 flex items-center gap-1.5 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar w-full" id="instructor-directory-pills">
           <!-- Populated dynamically by JS -->
         </div>
       </div>
 
       <!-- Instructor Profile Header Card -->
-      <div id="instructor-profile-card"></div>
+      <div id="instructor-profile-card" class="min-w-0 max-w-full"></div>
 
       <!-- Timetable -->
-      <div id="instructor-timetable-container">
+      <div id="instructor-timetable-container" class="min-w-0 max-w-full">
       </div>
     </div>
 
     <!-- =========================================================================
          TAB 4: FACULTY SUMMARY ROSTER
          ========================================================================= -->
-    <div data-tab-content="roster" class="hidden space-y-3">
-      <div class="bg-white px-4 py-3 border border-slate-300 flex items-center justify-between">
-        <div>
+    <div data-tab-content="roster" class="hidden space-y-3 min-w-0 max-w-full overflow-x-hidden">
+      <div class="bg-white px-3.5 sm:px-4 py-3 border border-slate-300 flex items-center justify-between min-w-0">
+        <div class="min-w-0">
           <h2 class="text-xs font-mono uppercase tracking-wider font-bold text-slate-900">Faculty Teaching Load Summary (Form FLR-001)</h2>
           <p class="text-xs text-slate-500 mt-0.5">Official departmental roster and weekly contact session assignments</p>
         </div>
       </div>
 
-      <div id="roster-container">
+      <div id="roster-container" class="min-w-0 max-w-full">
       </div>
     </div>
 

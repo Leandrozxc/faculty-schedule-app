@@ -138,6 +138,8 @@ const state = {
   selectedRoom: '',
   selectedInstructor: '',
   roomSearchQuery: '',
+  instructorDayFilter: 'ALL',
+  roomDayFilter: 'ALL',
   legendCollapsed: false,
   masterFilter: {
     day: 'ALL',
@@ -816,7 +818,7 @@ function renderInstructorDirectoryPills() {
 
   const instructors = state.data.instructors;
   container.innerHTML = `
-    <span class="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400 mr-1 shrink-0">QUICK DIRECTORY (${instructors.length}):</span>
+    <span class="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400 mr-1 shrink-0">FACULTY (${instructors.length}):</span>
     ${instructors.map(inst => {
       const isSelected = inst.name === state.selectedInstructor;
       const color = getInstructorColor(inst.name);
@@ -827,13 +829,13 @@ function renderInstructorDirectoryPills() {
                 aria-pressed="${isSelected ? 'true' : 'false'}"
                 onclick="selectInstructorAutocomplete('${escapeHtmlAttr(inst.name)}')"
                 title="${escapeHtmlAttr(`${inst.name} (${classCount} academic classes)`)}"
-                class="h-6 px-2 text-[11px] border inline-flex items-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                class="h-7 sm:h-6 px-2.5 sm:px-2 text-[11px] border inline-flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                   isSelected
                     ? 'bg-slate-900 text-white border-slate-900 font-bold'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 hover:border-slate-400 font-medium'
                 }">
           <span class="w-[7px] h-[7px] rounded-xs shrink-0" style="background-color: ${color.ring}"></span>
-          <span class="truncate max-w-[120px]">${surname}</span>
+          <span class="whitespace-nowrap">${surname}</span>
         </button>
       `;
     }).join('')}
@@ -918,8 +920,8 @@ function renderRoomPills() {
     }
 
     return `
-      <button type="button" aria-pressed="${isSelected ? 'true' : 'false'}" class="h-7 px-2.5 text-xs border transition-colors flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${btnClasses}" onclick="selectRoom('${escapeHtmlAttr(r)}')">
-        <span class="font-mono text-[11px]">${r}</span>
+      <button type="button" aria-pressed="${isSelected ? 'true' : 'false'}" class="h-7 px-2.5 text-xs border transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${btnClasses}" onclick="selectRoom('${escapeHtmlAttr(r)}')">
+        <span class="font-mono text-[11px] whitespace-nowrap">${r}</span>
         ${hasConflict ? `<i data-lucide="alert-triangle" class="w-3 h-3 shrink-0 ${isSelected ? 'text-amber-300' : 'text-red-600'}" aria-label="Room has schedule conflict"></i>` : ''}
       </button>
     `;
@@ -935,8 +937,13 @@ window.selectRoom = function(room) {
   initIcons();
 };
 
+window.selectRoomMobileDay = function(dayVal) {
+  state.roomDayFilter = dayVal;
+  renderRoomOccupancy();
+};
+
 /* =========================================================================
-   TAB 1: ROOM OCCUPANCY & CONFLICT CHECKER
+   TAB 3: ROOM OCCUPANCY & CONFLICT CHECKER
    ========================================================================= */
 function renderRoomOccupancy() {
   if (!state.data) return;
@@ -960,28 +967,28 @@ function renderRoomOccupancy() {
 
   if (statsContainer) {
     statsContainer.innerHTML = `
-      <div class="flex flex-wrap items-center justify-between gap-4 bg-white px-4 py-3 border border-slate-300">
+      <div class="flex flex-wrap items-center justify-between gap-3 sm:gap-4 bg-white px-3.5 sm:px-4 py-3 border border-slate-300">
         <div class="flex items-center gap-3">
           <div>
             <div class="text-[10px] font-mono uppercase tracking-widest text-slate-400 font-bold">ACTIVE FACILITY LEDGER</div>
-            <div class="text-base font-bold text-slate-900 flex items-center gap-2.5 mt-0.5">
+            <div class="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2 mt-0.5">
               <span class="font-mono tracking-tight">${currentRoom}</span>
               ${roomConflicts.length > 0
-                ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-mono bg-red-50 text-red-800 font-semibold border border-red-300"><i data-lucide="alert-triangle" class="w-3 h-3 text-red-600" aria-hidden="true"></i>${roomConflicts.length} CONFLICT${roomConflicts.length > 1 ? 'S' : ''}</span>`
-                : `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-mono bg-emerald-50 text-emerald-800 font-semibold border border-emerald-300"><i data-lucide="check" class="w-3 h-3 text-emerald-600" aria-hidden="true"></i>CONFLICT-FREE</span>`
+                ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10.5px] font-mono bg-red-50 text-red-800 font-semibold border border-red-300"><i data-lucide="alert-triangle" class="w-3 h-3 text-red-600" aria-hidden="true"></i>${roomConflicts.length} CONFLICT${roomConflicts.length > 1 ? 'S' : ''}</span>`
+                : `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10.5px] font-mono bg-emerald-50 text-emerald-800 font-semibold border border-emerald-300"><i data-lucide="check" class="w-3 h-3 text-emerald-600" aria-hidden="true"></i>CONFLICT-FREE</span>`
               }
             </div>
           </div>
         </div>
-        <div class="flex items-center gap-6">
+        <div class="flex items-center gap-4 sm:gap-6">
           <div>
             <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">ASSIGNED SESSIONS</div>
-            <div class="text-sm font-bold text-slate-900 font-mono tabular-nums mt-0.5">${occupiedSlots} / ${totalSlots} periods</div>
+            <div class="text-xs sm:text-sm font-bold text-slate-900 font-mono tabular-nums mt-0.5">${occupiedSlots} / ${totalSlots} periods</div>
           </div>
           <div>
             <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">UTILIZATION RATE</div>
             <div class="flex items-center gap-2 mt-0.5">
-              <div class="w-28 bg-slate-100 h-2 overflow-hidden border border-slate-300">
+              <div class="w-20 sm:w-28 bg-slate-100 h-2 overflow-hidden border border-slate-300">
                 <div class="bg-blue-600 h-full transition-all" style="width: ${utilPercent}%"></div>
               </div>
               <span class="text-xs font-bold text-slate-900 font-mono tabular-nums">${utilPercent}%</span>
@@ -996,7 +1003,7 @@ function renderRoomOccupancy() {
     if (roomConflicts.length > 0) {
       conflictContainer.classList.remove('hidden');
       conflictContainer.innerHTML = `
-        <div class="p-3.5 bg-red-50 border border-red-300 border-l-4 border-l-red-600 text-red-950">
+        <div class="p-3 sm:p-3.5 bg-red-50 border border-red-300 border-l-4 border-l-red-600 text-red-950">
           <div class="text-xs font-bold uppercase tracking-wider flex items-center gap-2 text-red-900 font-mono">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600 shrink-0" aria-hidden="true"></i>
             <span>Room Double-Booking Detected in ${currentRoom}</span>
@@ -1018,9 +1025,84 @@ function renderRoomOccupancy() {
   }
 
   const days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+  const activeMobileDay = state.roomDayFilter || 'ALL';
+  const mobileDays = activeMobileDay === 'ALL' ? days : [activeMobileDay];
 
+  // 1. Mobile Day Selector + Mobile Vertical Room Ledger (<768px)
   let html = `
-    <div class="overflow-x-auto border border-slate-300 bg-white">
+    <div class="md:hidden space-y-3">
+      <!-- Mobile Day Picker Bar -->
+      <div class="bg-white border border-slate-300 p-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <button type="button" onclick="selectRoomMobileDay('ALL')" class="h-7 px-2.5 text-[11px] font-mono border shrink-0 transition-colors cursor-pointer ${
+          activeMobileDay === 'ALL' ? 'bg-slate-900 text-white border-slate-900 font-bold' : 'bg-slate-50 text-slate-700 border-slate-300 font-medium'
+        }">
+          ALL (${roomSessions.length})
+        </button>
+        ${days.map(d => {
+          const dCount = roomSessions.filter(s => s.day === d).length;
+          const isSel = activeMobileDay === d;
+          return `
+            <button type="button" onclick="selectRoomMobileDay('${d}')" class="h-7 px-2.5 text-[11px] font-mono border shrink-0 transition-colors cursor-pointer ${
+              isSel ? 'bg-blue-600 text-white border-blue-600 font-bold' : 'bg-white text-slate-700 border-slate-300 font-medium'
+            }">
+              ${DAY_SHORT_LABELS[d]} (${dCount})
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      ${mobileDays.map(d => {
+        const daySessions = roomSessions.filter(s => s.day === d);
+        return `
+          <div class="border border-slate-300 bg-white">
+            <div class="bg-slate-900 text-white px-3 py-2 flex items-center justify-between font-mono text-xs">
+              <span class="font-bold tracking-wider">${d} — ${currentRoom}</span>
+              <span class="px-2 py-0.5 text-[10.5px] bg-slate-800 text-amber-300 border border-slate-700 font-bold">${daySessions.length} OCCUPIED</span>
+            </div>
+            <div class="divide-y divide-slate-200">
+              ${PERIOD_DEFINITIONS.map((periodDef, pIdx) => {
+                const matched = daySessions.filter(s => getSessionPeriodIndex(s) === pIdx);
+                if (matched.length === 0) {
+                  return `
+                    <div class="px-3 py-2 flex items-center justify-between text-xs bg-slate-50/40">
+                      <div class="flex items-center gap-2 font-mono">
+                        <span class="px-1.5 py-0.5 text-[10px] font-bold bg-slate-200 text-slate-700">${periodDef.code}</span>
+                        <span class="text-[11px] text-slate-500 tabular-nums">${periodDef.shortLabel}</span>
+                      </div>
+                      <span class="text-[10.5px] font-mono text-emerald-700 font-semibold">AVAILABLE</span>
+                    </div>
+                  `;
+                }
+                return matched.map(s => {
+                  const color = getInstructorColor(s.instructor);
+                  return `
+                    <div role="button" tabindex="0" onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')" class="px-3 py-2.5 bg-white hover:bg-blue-50/40 flex flex-col gap-1 cursor-pointer" style="border-left: 4px solid ${color.ring}">
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                          <span class="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-slate-900 text-white">${periodDef.code}</span>
+                          <span class="text-xs font-mono font-bold text-slate-700 tabular-nums">${periodDef.shortLabel}</span>
+                        </div>
+                        <span class="text-[11px] font-mono font-semibold px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200">Sec ${s.section}</span>
+                      </div>
+                      <div class="flex items-center justify-between gap-2 mt-0.5">
+                        <span class="text-sm font-bold text-slate-900">${s.subject}</span>
+                        <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                          <span class="w-2 h-2 rounded-xs shrink-0" style="background-color: ${color.ring}"></span>
+                          <span>${s.instructor.split(',')[0]}</span>
+                        </span>
+                      </div>
+                    </div>
+                  `;
+                }).join('');
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <!-- 2. Desktop 6-Column Room Matrix (>=768px) -->
+    <div class="hidden md:block overflow-x-auto border border-slate-300 bg-white">
       <table class="w-full border-collapse text-left min-w-[1140px] table-fixed">
         <thead>
           <tr class="bg-slate-900 text-white text-[11px] font-mono font-bold uppercase tracking-wider">
@@ -1145,7 +1227,7 @@ function renderMasterTimeStrip(baseSessions) {
 
   const allSelected = activePeriod === 'ALL';
   stripEl.innerHTML = `
-    <div class="flex items-center gap-1.5 overflow-x-auto py-0.5">
+    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 w-full">
       <span class="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400 mr-1 shrink-0">TIME BLOCKS:</span>
       <button type="button"
               onclick="selectMasterTimePeriod('ALL')"
@@ -1323,7 +1405,7 @@ function renderMasterSchedule() {
   // Build Period-Separated Swiss Architectural Schedule
   let html = `
     <div class="overflow-x-auto pb-2">
-      <div class="${days.length > 1 ? 'min-w-[1200px]' : 'min-w-[520px]'} space-y-4">
+      <div class="${days.length > 1 ? 'md:min-w-[1200px]' : 'md:min-w-[520px]'} space-y-4">
   `;
 
   visiblePeriods.forEach((periodDef) => {
@@ -1344,10 +1426,10 @@ function renderMasterSchedule() {
     html += `
       <section aria-label="Time Period ${periodDef.code} ${periodDef.label}" class="border border-slate-300 bg-white shadow-2xs">
         <!-- High-Contrast Full-Width Time Period Separator Bar -->
-        <div class="bg-[#0F172A] text-white px-3.5 py-2 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <div class="flex items-center gap-2.5">
+        <div class="bg-[#0F172A] text-white px-3 sm:px-3.5 py-2 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2 sm:gap-2.5">
             <span class="px-2 py-0.5 text-[11px] font-mono font-bold bg-blue-600 text-white tracking-wider">${periodDef.code}</span>
-            <span class="text-sm font-mono font-bold tracking-tight text-white tabular-nums">${periodDef.start} – ${periodDef.end}</span>
+            <span class="text-xs sm:text-sm font-mono font-bold tracking-tight text-white tabular-nums">${periodDef.start} – ${periodDef.end}</span>
             <span class="hidden sm:inline-block text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 bg-slate-800 text-slate-300 border border-slate-700">${periodDef.shift}</span>
           </div>
           <div class="flex items-center gap-3 text-[11px] font-mono">
@@ -1358,8 +1440,62 @@ function renderMasterSchedule() {
           </div>
         </div>
 
-        <!-- Period Timetable Columns -->
-        <table class="w-full border-collapse text-left table-fixed">
+        <!-- Mobile Day-Grouped Ledger (<768px) -->
+        <div class="md:hidden divide-y divide-slate-300">
+          ${days.map(d => {
+            const slotSessions = periodSessions.filter(s => s.day === d);
+            if (slotSessions.length === 0) return '';
+            return `
+              <div class="bg-white">
+                <div class="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between font-mono">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-900">${d}</span>
+                    <span class="text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.2 border border-blue-200">${periodDef.shortLabel}</span>
+                  </div>
+                  <span class="text-[10px] font-bold px-1.5 py-0.2 bg-slate-800 text-white">${slotSessions.length}</span>
+                </div>
+                <div class="divide-y divide-slate-200">
+                  ${slotSessions.map(s => {
+                    const color = getInstructorColor(s.instructor);
+                    const isDuty = Boolean(s.isDuty);
+                    const leftBarColor = isDuty ? '#64748B' : color.ring;
+                    const dotColor = isDuty ? '#64748B' : color.ring;
+                    const displaySubject = isDuty ? (s.dutyName || s.subject.replace(/\s*\(Office Duty\)/i, '')) : s.subject;
+                    const displayRoom = s.room === 'OFFICE / DEPT' ? 'DEPT' : s.room;
+                    const displaySection = isDuty ? 'Office Duty' : (s.section && s.section !== '-' ? `Sec ${s.section}` : 'Lec / Lab');
+                    const instructorSurname = s.instructor.split(',')[0];
+                    return `
+                      <div role="button" tabindex="0"
+                           onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')"
+                           class="px-3 py-2 ${isDuty ? 'bg-slate-50/90' : 'bg-white'} active:bg-blue-50 cursor-pointer"
+                           style="border-left: 4px solid ${leftBarColor};">
+                        <div class="flex items-center justify-between gap-2">
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-xs font-bold text-slate-900 truncate">${displaySubject}</span>
+                            <span class="text-[10.5px] font-mono font-semibold text-blue-700 shrink-0">${displaySection}</span>
+                          </div>
+                          <span class="text-[10.5px] font-mono font-bold px-1.5 py-0.5 bg-slate-100 text-slate-800 border border-slate-300 shrink-0">${displayRoom}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 mt-1">
+                          <span class="text-[10px] font-mono text-slate-500 tabular-nums">${DAY_SHORT_LABELS[d]} • ${periodDef.shortLabel}</span>
+                          <span class="text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
+                            <span class="w-[7px] h-[7px] rounded-xs shrink-0" style="background-color: ${dotColor}"></span>
+                            <span>${instructorSurname}</span>
+                          </span>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            `;
+          }).join('') || `
+            <div class="p-4 text-center text-xs font-mono text-slate-400">NO SCHEDULED CLASSES IN THIS PERIOD</div>
+          `}
+        </div>
+
+        <!-- Desktop Period Timetable Columns (>=768px) -->
+        <table class="hidden md:table w-full border-collapse text-left table-fixed">
           <thead>
             <tr class="bg-slate-100 border-b border-slate-300">
               <th scope="col" class="py-1.5 px-3 w-[118px] min-w-[118px] border-r border-slate-300 sticky left-0 bg-slate-100 z-10 text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500 sticky-time-col">
@@ -1491,6 +1627,11 @@ window.viewInstructorInMaster = function(name) {
   switchTab('master');
 };
 
+window.selectInstructorMobileDay = function(dayVal) {
+  state.instructorDayFilter = dayVal;
+  renderInstructorSchedule();
+};
+
 function renderInstructorSchedule() {
   if (!state.data || !state.data.instructors) return;
 
@@ -1514,16 +1655,16 @@ function renderInstructorSchedule() {
 
   if (profileContainer) {
     profileContainer.innerHTML = `
-      <div class="bg-white p-4 border border-slate-300 flex flex-wrap items-center justify-between gap-4" style="border-left: 5px solid ${instColor.ring}">
+      <div class="bg-white p-3 sm:p-4 border border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 min-w-0 max-w-full overflow-hidden" style="border-left: 5px solid ${instColor.ring}">
         <div class="min-w-0">
-          <div class="flex items-center gap-3">
-            <div class="w-11 h-11 font-mono font-bold flex items-center justify-center text-lg text-white shrink-0" style="background-color: ${instColor.ring}">
+          <div class="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
+            <div class="w-9 h-9 sm:w-11 sm:h-11 font-mono font-bold flex items-center justify-center text-sm sm:text-lg text-white shrink-0" style="background-color: ${instColor.ring}">
               ${faculty.name.split(',')[0].charAt(0)}
             </div>
-            <div class="min-w-0">
-              <div class="text-base sm:text-lg font-bold text-slate-900 tracking-tight">${faculty.name}</div>
-              <div class="text-xs text-slate-500 flex flex-wrap items-center gap-2 mt-0.5">
-                <span class="px-2 py-0.5 font-mono text-[10.5px] font-semibold ${
+            <div class="min-w-0 flex-1">
+              <div class="text-sm sm:text-lg font-bold text-slate-900 tracking-tight leading-snug break-words">${faculty.name}</div>
+              <div class="text-xs text-slate-500 flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
+                <span class="px-1.5 py-0.5 font-mono text-[10px] sm:text-[10.5px] font-semibold ${
                   (faculty.status && (faculty.status.includes('FT') || faculty.status.toUpperCase().includes('FULL-TIME')))
                     ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                     : 'bg-amber-50 text-amber-800 border border-amber-300'
@@ -1531,10 +1672,10 @@ function renderInstructorSchedule() {
                   ${faculty.status}
                 </span>
                 <span class="text-slate-300">•</span>
-                <span class="font-medium text-slate-600">${faculty.qualification || 'Faculty Member'}</span>
+                <span class="font-medium text-slate-600 text-[11px] sm:text-xs break-words">${faculty.qualification || 'Faculty Member'}</span>
                 ${uniqueSubjects.length > 0 ? `
-                  <span class="text-slate-300">•</span>
-                  <span class="font-mono text-[11px] text-slate-700 font-semibold">Courses: ${uniqueSubjects.join(', ')}</span>
+                  <span class="hidden sm:inline text-slate-300">•</span>
+                  <span class="font-mono text-[11px] text-slate-700 font-semibold w-full sm:w-auto mt-0.5 sm:mt-0">Courses: ${uniqueSubjects.join(', ')}</span>
                 ` : ''}
               </div>
               ${assignedRooms.length > 0 ? `
@@ -1551,25 +1692,25 @@ function renderInstructorSchedule() {
           </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-5 ml-auto">
-          <div class="flex items-center gap-5 border-r border-slate-200 pr-5">
-            <div class="text-right">
-              <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">ACADEMIC CLASSES</div>
-              <div class="text-sm sm:text-base font-bold text-slate-900 font-mono tabular-nums">${academicSessions.length} classes / wk</div>
+        <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-5 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-200 sm:ml-auto min-w-0">
+          <div class="flex items-center gap-3 sm:gap-5 sm:border-r sm:border-slate-200 sm:pr-5">
+            <div>
+              <div class="text-[9.5px] sm:text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">ACADEMIC CLASSES</div>
+              <div class="text-xs sm:text-base font-bold text-slate-900 font-mono tabular-nums">${academicSessions.length} classes / wk</div>
             </div>
-            <div class="text-right">
-              <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">OFFICE / CONSULTATION</div>
-              <div class="text-sm sm:text-base font-bold text-slate-700 font-mono tabular-nums">${dutySessions.length} periods / wk</div>
+            <div>
+              <div class="text-[9.5px] sm:text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">OFFICE / CONSULT</div>
+              <div class="text-xs sm:text-base font-bold text-slate-700 font-mono tabular-nums">${dutySessions.length} periods / wk</div>
             </div>
           </div>
 
-          <div class="flex items-center gap-2">
-            <button type="button" onclick="viewInstructorInMaster('${escapeHtmlAttr(faculty.name)}')" class="h-8 px-3 text-xs font-mono font-semibold border border-slate-300 bg-slate-50 hover:bg-slate-900 text-slate-700 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer">
-              <i data-lucide="calendar" class="w-3.5 h-3.5" aria-hidden="true"></i>
-              <span>MASTER VIEW</span>
+          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button type="button" onclick="viewInstructorInMaster('${escapeHtmlAttr(faculty.name)}')" class="h-7 sm:h-8 px-2 sm:px-3 text-[10.5px] sm:text-xs font-mono font-semibold border border-slate-300 bg-slate-50 hover:bg-slate-900 text-slate-700 hover:text-white flex items-center gap-1 sm:gap-1.5 transition-colors cursor-pointer">
+              <i data-lucide="calendar" class="w-3 h-3 sm:w-3.5 sm:h-3.5" aria-hidden="true"></i>
+              <span>MASTER</span>
             </button>
-            <button type="button" onclick="window.print()" class="h-8 px-3 text-xs font-mono font-semibold border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 flex items-center gap-1.5 transition-colors cursor-pointer">
-              <i data-lucide="printer" class="w-3.5 h-3.5 text-slate-600" aria-hidden="true"></i>
+            <button type="button" onclick="window.print()" class="h-7 sm:h-8 px-2 sm:px-3 text-[10.5px] sm:text-xs font-mono font-semibold border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 flex items-center gap-1 sm:gap-1.5 transition-colors cursor-pointer">
+              <i data-lucide="printer" class="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-600" aria-hidden="true"></i>
               <span>PRINT</span>
             </button>
           </div>
@@ -1579,9 +1720,84 @@ function renderInstructorSchedule() {
   }
 
   const days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+  const activeMobileDay = state.instructorDayFilter || 'ALL';
+  const mobileDays = activeMobileDay === 'ALL' ? days : [activeMobileDay];
+  const totalInstSessions = (faculty.sessions || []).length;
 
+  // 1. Mobile Day Selector + Mobile Chronological Schedule Cards (<768px)
   let html = `
-    <div class="overflow-x-auto border border-slate-300 bg-white">
+    <div class="md:hidden space-y-3">
+      <!-- Mobile Day Switcher Bar -->
+      <div class="bg-white border border-slate-300 p-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <button type="button" onclick="selectInstructorMobileDay('ALL')" class="h-7 px-2.5 text-[11px] font-mono border shrink-0 transition-colors cursor-pointer ${
+          activeMobileDay === 'ALL' ? 'bg-slate-900 text-white border-slate-900 font-bold' : 'bg-slate-50 text-slate-700 border-slate-300 font-medium'
+        }">
+          ALL DAYS (${totalInstSessions})
+        </button>
+        ${days.map(d => {
+          const dCount = (faculty.sessions || []).filter(s => s.day === d).length;
+          const isSel = activeMobileDay === d;
+          return `
+            <button type="button" onclick="selectInstructorMobileDay('${d}')" class="h-7 px-2.5 text-[11px] font-mono border shrink-0 transition-colors cursor-pointer ${
+              isSel ? 'bg-blue-600 text-white border-blue-600 font-bold' : 'bg-white text-slate-700 border-slate-300 font-medium'
+            }">
+              ${DAY_SHORT_LABELS[d]} (${dCount})
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      ${mobileDays.map(d => {
+        const dayEntries = [];
+        PERIOD_DEFINITIONS.forEach((periodDef, pIdx) => {
+          const matched = (faculty.sessions || []).filter(s => s.day === d && getSessionPeriodIndex(s) === pIdx);
+          matched.forEach(s => dayEntries.push({ session: s, periodDef }));
+        });
+
+        return `
+          <div class="border border-slate-300 bg-white">
+            <div class="bg-slate-900 text-white px-3 py-2 flex items-center justify-between font-mono text-xs">
+              <span class="font-bold tracking-wider">${d}</span>
+              <span class="px-2 py-0.5 text-[10.5px] bg-slate-800 ${dayEntries.length > 0 ? 'text-amber-300' : 'text-slate-400'} border border-slate-700 font-bold">${dayEntries.length} ${dayEntries.length === 1 ? 'SESSION' : 'SESSIONS'}</span>
+            </div>
+            ${dayEntries.length === 0 ? `
+              <div class="p-4 text-center text-xs font-mono text-slate-400 bg-slate-50/40">
+                NO SCHEDULED CLASSES OR DUTY ON ${d}
+              </div>
+            ` : `
+              <div class="divide-y divide-slate-200">
+                ${dayEntries.map(({ session: s, periodDef }) => {
+                  const leftBar = s.isDuty ? '#64748B' : instColor.ring;
+                  const displaySubject = s.isDuty ? (s.dutyName || s.subject.replace(/\s*\(Office Duty\)/i, '')) : s.subject;
+                  const displayRoom = s.room === 'OFFICE / DEPT' ? 'DEPT' : s.room;
+                  const displaySection = s.isDuty ? 'OFFICE DUTY' : (s.section && s.section !== '-' ? `Sec ${s.section}` : 'LEC / LAB');
+                  return `
+                    <div class="px-3 py-2.5 ${s.isDuty ? 'bg-slate-50/90' : 'bg-white'} flex flex-col gap-1" style="border-left: 4px solid ${leftBar}">
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 font-mono">
+                          <span class="px-1.5 py-0.5 text-[10px] font-bold bg-slate-900 text-white">${periodDef.code}</span>
+                          <span class="text-xs font-bold text-slate-800 tabular-nums">${periodDef.shortLabel}</span>
+                        </div>
+                        <button type="button" onclick="viewRoomFromSchedule('${escapeHtmlAttr(s.room)}')" class="px-2 py-0.5 font-mono text-[10.5px] font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                          ${displayRoom}
+                        </button>
+                      </div>
+                      <div class="flex items-center justify-between gap-2 mt-0.5">
+                        <span class="text-sm font-bold ${s.isDuty ? 'text-slate-700' : 'text-slate-900'}">${displaySubject}</span>
+                        <span class="text-xs font-mono font-semibold ${s.isDuty ? 'text-slate-600' : 'text-blue-700'}">${displaySection}</span>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <!-- 2. Desktop 6-Column Weekly Matrix (>=768px) -->
+    <div class="hidden md:block overflow-x-auto border border-slate-300 bg-white">
       <table class="w-full border-collapse text-left min-w-[1140px] table-fixed">
         <thead>
           <tr class="bg-slate-900 text-white text-[11px] font-mono font-bold uppercase tracking-wider">
@@ -1665,7 +1881,40 @@ function renderRosterView() {
   const instructors = state.data.instructors || [];
 
   container.innerHTML = `
-    <div class="overflow-x-auto border border-slate-300 bg-white">
+    <!-- 1. Mobile Faculty Cards (<640px) -->
+    <div class="sm:hidden space-y-2.5">
+      ${instructors.map((inst, idx) => {
+        const color = getInstructorColor(inst.name);
+        const classCount = inst.sessions.filter(s => !s.isDuty).length;
+        const isFT = inst.status && (inst.status.includes('FT') || inst.status.toUpperCase().includes('FULL-TIME'));
+        return `
+          <div class="bg-white border border-slate-300 p-3 flex flex-col gap-2" style="border-left: 4px solid ${color.ring}">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-[11px] font-mono text-slate-400">${String(idx + 1).padStart(2, '0')}</span>
+                <span class="font-bold text-xs text-slate-900 truncate">${inst.name}</span>
+              </div>
+              <span class="px-1.5 py-0.5 font-mono text-[10px] font-semibold shrink-0 ${
+                isFT ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-amber-50 text-amber-800 border border-amber-300'
+              }">
+                ${inst.status}
+              </span>
+            </div>
+            <div class="text-[11px] text-slate-600 leading-snug">${inst.qualification || '-'}</div>
+            <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+              <span class="text-xs font-mono font-bold text-slate-800">${classCount} classes / wk</span>
+              <button type="button" class="px-2.5 py-1 text-[11px] font-mono font-semibold text-white bg-slate-900 active:bg-blue-700 border border-slate-900 cursor-pointer"
+                      onclick="viewInstructor('${escapeHtmlAttr(inst.name)}')">
+                OPEN TIMETABLE →
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <!-- 2. Desktop Faculty Roster Table (>=640px) -->
+    <div class="hidden sm:block overflow-x-auto border border-slate-300 bg-white">
       <table class="w-full text-left text-xs divide-y divide-slate-300">
         <thead class="bg-slate-900 text-[11px] font-mono uppercase font-bold text-white tracking-wider">
           <tr>
@@ -1680,6 +1929,7 @@ function renderRosterView() {
         <tbody class="divide-y divide-slate-200 text-xs">
           ${instructors.map((inst, idx) => {
             const color = getInstructorColor(inst.name);
+            const isFT = inst.status && (inst.status.includes('FT') || inst.status.toUpperCase().includes('FULL-TIME'));
             return `
               <tr class="hover:bg-slate-50 transition-colors">
                 <td class="py-2.5 px-4 text-slate-400 font-mono text-xs tabular-nums">${String(idx + 1).padStart(2, '0')}</td>
@@ -1691,7 +1941,7 @@ function renderRosterView() {
                 </td>
                 <td class="py-2.5 px-4">
                   <span class="px-2 py-0.5 font-mono text-[10.5px] font-semibold ${
-                    inst.status.includes('FT') ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-amber-50 text-amber-800 border border-amber-300'
+                    isFT ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-amber-50 text-amber-800 border border-amber-300'
                   }">
                     ${inst.status}
                   </span>
@@ -1762,7 +2012,7 @@ function renderInstructorLegend() {
       </div>
 
       ${isCollapsed ? '' : `
-        <div class="flex items-center gap-1 flex-wrap mt-2 pt-2 border-t border-slate-200">
+        <div class="flex items-center gap-1 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar mt-2 pt-2 border-t border-slate-200">
           ${instructors.map(i => {
             const color = getInstructorColor(i.name);
             const isSelected = activeInstructor === i.name;
@@ -1780,10 +2030,10 @@ function renderInstructorLegend() {
                       aria-pressed="${isSelected ? 'true' : 'false'}"
                       aria-label="Filter by instructor ${escapeHtmlAttr(i.name)}"
                       title="${escapeHtmlAttr(`${i.name} (${classCount} academic classes)`)}"
-                      class="h-6 px-2 text-[11px] transition-colors inline-flex items-center gap-1.5 border cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${chipStateClasses}"
+                      class="h-6 px-2 text-[11px] transition-colors inline-flex items-center gap-1.5 border shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${chipStateClasses}"
                       onclick="filterByInstructor('${escapeHtmlAttr(i.name)}')">
                 <span class="w-[7px] h-[7px] rounded-xs shrink-0" style="background-color: ${color.ring}"></span>
-                <span class="truncate max-w-[115px]">${surname}</span>
+                <span class="whitespace-nowrap">${surname}</span>
               </button>
             `;
           }).join('')}
