@@ -134,7 +134,7 @@ function getInstructorColor(name) {
 // Application State
 const state = {
   data: null,
-  activeTab: 'rooms', // 'rooms', 'master', 'instructor', 'roster'
+  activeTab: 'instructor', // 'instructor' (default student-first view), 'master', 'rooms', 'roster'
   selectedRoom: '',
   selectedInstructor: '',
   roomSearchQuery: '',
@@ -537,6 +537,7 @@ function populateDropdowns() {
   }
   updateClearButtonVisibility();
   updateInstructorQuickBadge();
+  renderInstructorDirectoryPills();
 
   // Master Filter Instructors Dropdown
   const masterInstSelect = document.getElementById('filter-master-instructor');
@@ -804,9 +805,40 @@ window.selectInstructorAutocomplete = function(name) {
   }
 
   updateInstructorQuickBadge();
+  renderInstructorDirectoryPills();
   renderInstructorSchedule();
   initIcons();
 };
+
+function renderInstructorDirectoryPills() {
+  const container = document.getElementById('instructor-directory-pills');
+  if (!container || !state.data || !state.data.instructors) return;
+
+  const instructors = state.data.instructors;
+  container.innerHTML = `
+    <span class="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400 mr-1 shrink-0">QUICK DIRECTORY (${instructors.length}):</span>
+    ${instructors.map(inst => {
+      const isSelected = inst.name === state.selectedInstructor;
+      const color = getInstructorColor(inst.name);
+      const surname = inst.name.split(',')[0];
+      const classCount = (inst.sessions || []).filter(s => !s.isDuty).length;
+      return `
+        <button type="button"
+                aria-pressed="${isSelected ? 'true' : 'false'}"
+                onclick="selectInstructorAutocomplete('${escapeHtmlAttr(inst.name)}')"
+                title="${escapeHtmlAttr(`${inst.name} (${classCount} academic classes)`)}"
+                class="h-6 px-2 text-[11px] border inline-flex items-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                  isSelected
+                    ? 'bg-slate-900 text-white border-slate-900 font-bold'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 hover:border-slate-400 font-medium'
+                }">
+          <span class="w-[7px] h-[7px] rounded-xs shrink-0" style="background-color: ${color.ring}"></span>
+          <span class="truncate max-w-[120px]">${surname}</span>
+        </button>
+      `;
+    }).join('')}
+  `;
+}
 
 function updateInstructorQuickBadge() {
   const badgeEl = document.getElementById('instructor-quick-badge');
@@ -1443,8 +1475,22 @@ function renderMasterSchedule() {
 }
 
 /* =========================================================================
-   TAB 3: INDIVIDUAL INSTRUCTOR VIEW
+   TAB 1 (MAIN SCREEN): INDIVIDUAL INSTRUCTOR VIEW
    ========================================================================= */
+window.viewRoomFromSchedule = function(room) {
+  if (!room || room === 'OFFICE / DEPT') return;
+  state.selectedRoom = room;
+  switchTab('rooms');
+};
+
+window.viewInstructorInMaster = function(name) {
+  if (!name) return;
+  state.masterFilter.instructor = name;
+  const masterInst = document.getElementById('filter-master-instructor');
+  if (masterInst) masterInst.value = name;
+  switchTab('master');
+};
+
 function renderInstructorSchedule() {
   if (!state.data || !state.data.instructors) return;
 
@@ -1453,44 +1499,80 @@ function renderInstructorSchedule() {
   const container = document.getElementById('instructor-timetable-container');
   const profileContainer = document.getElementById('instructor-profile-card');
 
+  renderInstructorDirectoryPills();
+
   if (!faculty) {
     if (container) container.innerHTML = '<div class="p-8 text-center text-slate-400">Please select an instructor.</div>';
     return;
   }
 
   const instColor = getInstructorColor(faculty.name);
+  const academicSessions = (faculty.sessions || []).filter(s => !s.isDuty);
+  const dutySessions = (faculty.sessions || []).filter(s => s.isDuty);
+  const assignedRooms = [...new Set(academicSessions.map(s => s.room).filter(r => r && r !== 'OFFICE / DEPT'))];
+  const uniqueSubjects = [...new Set(academicSessions.map(s => s.subject).filter(Boolean))];
+
   if (profileContainer) {
     profileContainer.innerHTML = `
       <div class="bg-white p-4 border border-slate-300 flex flex-wrap items-center justify-between gap-4" style="border-left: 5px solid ${instColor.ring}">
-        <div>
+        <div class="min-w-0">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 font-mono font-bold flex items-center justify-center text-base text-white shrink-0" style="background-color: ${instColor.ring}">
+            <div class="w-11 h-11 font-mono font-bold flex items-center justify-center text-lg text-white shrink-0" style="background-color: ${instColor.ring}">
               ${faculty.name.split(',')[0].charAt(0)}
             </div>
-            <div>
-              <div class="text-base font-bold text-slate-900">${faculty.name}</div>
+            <div class="min-w-0">
+              <div class="text-base sm:text-lg font-bold text-slate-900 tracking-tight">${faculty.name}</div>
               <div class="text-xs text-slate-500 flex flex-wrap items-center gap-2 mt-0.5">
                 <span class="px-2 py-0.5 font-mono text-[10.5px] font-semibold ${
-                  faculty.status.includes('FT') ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-amber-50 text-amber-800 border border-amber-300'
+                  (faculty.status && (faculty.status.includes('FT') || faculty.status.toUpperCase().includes('FULL-TIME')))
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                    : 'bg-amber-50 text-amber-800 border border-amber-300'
                 }">
                   ${faculty.status}
                 </span>
                 <span class="text-slate-300">•</span>
                 <span class="font-medium text-slate-600">${faculty.qualification || 'Faculty Member'}</span>
+                ${uniqueSubjects.length > 0 ? `
+                  <span class="text-slate-300">•</span>
+                  <span class="font-mono text-[11px] text-slate-700 font-semibold">Courses: ${uniqueSubjects.join(', ')}</span>
+                ` : ''}
               </div>
+              ${assignedRooms.length > 0 ? `
+                <div class="flex items-center gap-1.5 flex-wrap mt-2">
+                  <span class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Assigned Rooms:</span>
+                  ${assignedRooms.map(room => `
+                    <button type="button" onclick="viewRoomFromSchedule('${escapeHtmlAttr(room)}')" title="Inspect room ${escapeHtmlAttr(room)} occupancy" class="px-1.5 py-0.5 text-[10.5px] font-mono font-semibold bg-slate-100 hover:bg-slate-900 text-slate-800 hover:text-white border border-slate-300 transition-colors cursor-pointer">
+                      ${room}
+                    </button>
+                  `).join('')}
+                </div>
+              ` : ''}
             </div>
           </div>
         </div>
 
-        <div class="flex items-center gap-5">
-          <div class="text-right">
-            <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">TEACHING LOAD</div>
-            <div class="text-base font-bold text-slate-900 font-mono tabular-nums">${faculty.sessions.filter(s => !s.isDuty).length} classes / wk</div>
+        <div class="flex flex-wrap items-center gap-5 ml-auto">
+          <div class="flex items-center gap-5 border-r border-slate-200 pr-5">
+            <div class="text-right">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">ACADEMIC CLASSES</div>
+              <div class="text-sm sm:text-base font-bold text-slate-900 font-mono tabular-nums">${academicSessions.length} classes / wk</div>
+            </div>
+            <div class="text-right">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">OFFICE / CONSULTATION</div>
+              <div class="text-sm sm:text-base font-bold text-slate-700 font-mono tabular-nums">${dutySessions.length} periods / wk</div>
+            </div>
           </div>
-          <button type="button" onclick="window.print()" class="h-8 px-3 text-xs font-mono font-semibold border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 flex items-center gap-1.5 transition-colors cursor-pointer">
-            <i data-lucide="printer" class="w-3.5 h-3.5 text-slate-600" aria-hidden="true"></i>
-            <span>PRINT SCHEDULE</span>
-          </button>
+
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="viewInstructorInMaster('${escapeHtmlAttr(faculty.name)}')" class="h-8 px-3 text-xs font-mono font-semibold border border-slate-300 bg-slate-50 hover:bg-slate-900 text-slate-700 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer">
+              <i data-lucide="calendar" class="w-3.5 h-3.5" aria-hidden="true"></i>
+              <span>MASTER VIEW</span>
+            </button>
+            <button type="button" onclick="window.print()" class="h-8 px-3 text-xs font-mono font-semibold border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 flex items-center gap-1.5 transition-colors cursor-pointer">
+              <i data-lucide="printer" class="w-3.5 h-3.5 text-slate-600" aria-hidden="true"></i>
+              <span>PRINT</span>
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -1530,20 +1612,28 @@ function renderInstructorSchedule() {
           </td>
         `;
       } else {
-        const s = matched[0];
-        const leftBar = s.isDuty ? '#64748B' : instColor.ring;
         html += `
           <td class="p-1.5 border-r border-slate-200 last:border-r-0 align-top">
-            <div class="h-16 px-2.5 py-1.5 flex flex-col justify-between border ${s.isDuty ? 'bg-slate-50 border-slate-300' : 'bg-white border-slate-300'}"
-                 style="border-left: 4px solid ${leftBar}">
-              <div class="flex items-center justify-between gap-1 min-w-0">
-                <span class="font-bold text-[12px] text-slate-900 truncate" title="${escapeHtmlAttr(s.subject)}">${s.subject}</span>
-                <span class="px-1.5 py-0.2 font-mono text-[10px] font-semibold bg-slate-100 text-slate-800 border border-slate-300 shrink-0">${s.room}</span>
-              </div>
-              <div class="text-[10.5px] font-mono flex justify-between items-center text-slate-600 pt-1 border-t border-slate-100">
-                <span class="font-semibold text-blue-700">${ s.isDuty ? 'OFFICE DUTY' : `Sec ${s.section}` }</span>
-                <span class="text-[10px] text-slate-500 tabular-nums">${periodDef.shortLabel}</span>
-              </div>
+            <div class="space-y-1.5">
+              ${matched.map(s => {
+                const leftBar = s.isDuty ? '#64748B' : instColor.ring;
+                const displaySubject = s.isDuty ? (s.dutyName || s.subject.replace(/\s*\(Office Duty\)/i, '')) : s.subject;
+                const displayRoom = s.room === 'OFFICE / DEPT' ? 'DEPT' : s.room;
+                const displaySection = s.isDuty ? 'OFFICE DUTY' : (s.section && s.section !== '-' ? `Sec ${s.section}` : 'LEC / LAB');
+                return `
+                  <div class="min-h-[60px] px-2.5 py-1.5 flex flex-col justify-between border ${s.isDuty ? 'bg-slate-50 border-slate-300' : 'bg-white border-slate-300'}"
+                       style="border-left: 4px solid ${leftBar}">
+                    <div class="flex items-center justify-between gap-1.5 min-w-0">
+                      <span class="font-bold text-[12.5px] ${s.isDuty ? 'text-slate-700' : 'text-slate-900'} truncate" title="${escapeHtmlAttr(s.subject)}">${displaySubject}</span>
+                      <span class="px-1.5 py-0.5 font-mono text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-300 shrink-0 leading-none">${displayRoom}</span>
+                    </div>
+                    <div class="text-[10.5px] font-mono flex justify-between items-center text-slate-600 pt-1 mt-1 border-t border-slate-100">
+                      <span class="font-semibold ${s.isDuty ? 'text-slate-600' : 'text-blue-700'} truncate">${displaySection}</span>
+                      <span class="text-[10px] text-slate-500 tabular-nums shrink-0">${periodDef.shortLabel}</span>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
           </td>
         `;
