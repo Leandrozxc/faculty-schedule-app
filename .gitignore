@@ -23,14 +23,3 @@ __pycache__/
 .agents/
 .gemini/
 design-system/
-
-
-# Python cache
-__pycache__/
-*.py[cod]
-
-# AI Agent skills & local design-system artifacts
-.agents/
-.gemini/
-design-system/
-.next/
