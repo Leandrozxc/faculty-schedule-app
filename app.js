@@ -171,11 +171,45 @@ const state = {
 
 // Initialize app on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
   initIcons();
   loadInitialData();
   setupEventListeners();
   initLiveClock();
 });
+
+function initTheme() {
+  const isDark = document.documentElement.classList.contains('dark');
+  updateThemeButtonUI(isDark);
+}
+
+function updateThemeButtonUI(isDark) {
+  const btn = document.getElementById('theme-toggle-btn');
+  if (!btn) return;
+  btn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+  btn.innerHTML = `
+    <i data-lucide="${isDark ? 'sun' : 'moon'}" class="w-3.5 h-3.5 ${isDark ? 'text-amber-400' : 'text-slate-600'}" aria-hidden="true"></i>
+    <span id="theme-toggle-label" class="hidden sm:inline text-xs font-medium">${isDark ? 'Light' : 'Dark'}</span>
+  `;
+  initIcons();
+}
+
+window.toggleTheme = function(forceMode) {
+  const currentlyDark = document.documentElement.classList.contains('dark');
+  const nextDark = typeof forceMode === 'boolean' ? forceMode : !currentlyDark;
+
+  if (nextDark) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+
+  try {
+    localStorage.setItem('cea_theme_preference', nextDark ? 'dark' : 'light');
+  } catch (e) {}
+
+  updateThemeButtonUI(nextDark);
+};
 
 function initIcons() {
   if (window.lucide) {
@@ -350,6 +384,14 @@ function setupEventListeners() {
 
   // File Upload Drag & Drop and File Input
   setupFileUpload();
+
+  // Theme Toggle Button
+  const themeToggleBtn = document.getElementById('theme-toggle-btn');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+      window.toggleTheme();
+    });
+  }
 
   // Print Button
   const printBtn = document.getElementById('print-schedule-btn');
