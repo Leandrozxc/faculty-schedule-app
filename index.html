@@ -232,7 +232,82 @@
   <!-- =========================================================================
        MAIN WORKSPACE
        ========================================================================= -->
-  <main class="max-w-[1520px] mx-auto px-2.5 sm:px-6 lg:px-8 py-3 sm:py-5 w-full min-w-0 overflow-x-hidden flex-1">
+  <main class="max-w-[1520px] mx-auto px-2.5 sm:px-6 lg:px-8 py-3 sm:py-5 w-full min-w-0 overflow-x-hidden flex-1 space-y-3 sm:space-y-4">
+
+    <!-- =========================================================================
+         LIVE CLOCK & CURRENT CLASS AVAILABILITY COMMAND LEDGER
+         ========================================================================= -->
+    <section id="live-clock-section" aria-label="Live Clock and Current Class Availability" class="no-print min-w-0 max-w-full">
+      <!-- Interactive Digital Clock Card -->
+      <div id="live-clock-trigger"
+           role="button"
+           tabindex="0"
+           aria-expanded="false"
+           aria-controls="live-availability-panel"
+           title="Click to inspect classes scheduled for the current day and time"
+           class="group bg-white border border-slate-300 hover:border-blue-600 shadow-2xs hover:shadow-md transition-all cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 min-w-0 max-w-full overflow-hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
+          <!-- Left Block: High-Contrast Swiss Digital Chronometer & Full Date -->
+          <div class="lg:col-span-5 bg-[#0F172A] group-hover:bg-[#131F38] transition-colors text-white px-3.5 sm:px-5 py-3 sm:py-3.5 flex items-center justify-between gap-3 min-w-0">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span id="live-clock-pulse" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                <span class="text-[10px] font-mono font-bold uppercase tracking-widest text-blue-400 truncate">
+                  LIVE CHRONOMETER • ASIA/MANILA (PST)
+                </span>
+              </div>
+              <!-- Prominent Digital Clock -->
+              <div id="live-clock-time" class="font-mono text-2xl sm:text-3xl font-bold tracking-tight text-white tabular-nums mt-0.5 leading-none">
+                --:--:-- --
+              </div>
+              <!-- Full Date with Day of the Week -->
+              <div id="live-clock-date" class="text-[11px] sm:text-xs font-mono font-semibold text-slate-300 uppercase tracking-wider mt-1.5 truncate">
+                LOADING CURRENT DATE...
+              </div>
+            </div>
+
+            <div class="shrink-0 flex flex-col items-end gap-1">
+              <span class="w-9 h-9 sm:w-10 sm:h-10 bg-slate-800/90 group-hover:bg-blue-600 border border-slate-700 group-hover:border-blue-500 text-slate-200 group-hover:text-white flex items-center justify-center transition-colors">
+                <i data-lucide="clock" class="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true"></i>
+              </span>
+              <span class="text-[9.5px] font-mono uppercase tracking-wider text-slate-400 group-hover:text-blue-300 transition-colors">
+                CLICK TO CHECK
+              </span>
+            </div>
+          </div>
+
+          <!-- Right Block: Real-Time Schedule Telemetry & Click Call-to-Action -->
+          <div class="lg:col-span-7 px-3.5 sm:px-5 py-3 sm:py-3.5 bg-white group-hover:bg-blue-50/25 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+            <div class="min-w-0 space-y-1">
+              <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <span class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">CURRENT PERIOD STATUS:</span>
+                <span id="live-clock-period-badge" class="px-2 py-0.5 text-[10.5px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                  CHECKING SCHEDULE...
+                </span>
+              </div>
+              <div id="live-clock-summary-title" class="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
+                Click to check ongoing classes scheduled for the current day and time
+              </div>
+              <div id="live-clock-summary-sub" class="text-[11px] sm:text-xs text-slate-500 font-mono truncate">
+                Compares current local time against department timetable records
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 shrink-0">
+              <span id="live-clock-cta-btn" class="h-8 sm:h-9 px-3 sm:px-3.5 text-[11px] sm:text-xs font-mono font-bold uppercase tracking-wider bg-slate-900 group-hover:bg-blue-600 text-white inline-flex items-center gap-1.5 transition-colors">
+                <span id="live-clock-cta-label">Check Current Classes</span>
+                <i id="live-clock-chevron" data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform duration-200" aria-hidden="true"></i>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expandable Current Class Availability & Schedule Status Panel -->
+      <div id="live-availability-panel" class="hidden border-x border-b border-slate-300 bg-white shadow-lg min-w-0 max-w-full overflow-hidden">
+        <!-- Populated dynamically by JS -->
+      </div>
+    </section>
 
     <!-- =========================================================================
          TAB 3: ROOM OCCUPANCY & CONFLICT CHECKER

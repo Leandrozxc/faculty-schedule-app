@@ -28,15 +28,15 @@ const INSTRUCTOR_COLOR_PALETTES = [
 
 // Explicit 9-Period Academic Time Definitions (differentiating Morning P1 07:30-09:00 AM from Evening P9 07:30-09:00 PM)
 const PERIOD_DEFINITIONS = [
-  { index: 0, code: 'P1', rawSlot: '07:30 - 09:00', start: '07:30 AM', end: '09:00 AM', label: '07:30 – 09:00 AM', shortLabel: '07:30–09:00 AM', shift: 'MORNING BLOCK' },
-  { index: 1, code: 'P2', rawSlot: '09:00 - 10:30', start: '09:00 AM', end: '10:30 AM', label: '09:00 – 10:30 AM', shortLabel: '09:00–10:30 AM', shift: 'MORNING BLOCK' },
-  { index: 2, code: 'P3', rawSlot: '10:30 - 12:00', start: '10:30 AM', end: '12:00 PM', label: '10:30 AM – 12:00 PM', shortLabel: '10:30–12:00 PM', shift: 'MORNING BLOCK' },
-  { index: 3, code: 'P4', rawSlot: '12:00 - 01:30', start: '12:00 PM', end: '01:30 PM', label: '12:00 – 01:30 PM', shortLabel: '12:00–01:30 PM', shift: 'MIDDAY BLOCK' },
-  { index: 4, code: 'P5', rawSlot: '01:30 - 03:00', start: '01:30 PM', end: '03:00 PM', label: '01:30 – 03:00 PM', shortLabel: '01:30–03:00 PM', shift: 'AFTERNOON BLOCK' },
-  { index: 5, code: 'P6', rawSlot: '03:00 - 04:30', start: '03:00 PM', end: '04:30 PM', label: '03:00 – 04:30 PM', shortLabel: '03:00–04:30 PM', shift: 'AFTERNOON BLOCK' },
-  { index: 6, code: 'P7', rawSlot: '04:30 - 06:00', start: '04:30 PM', end: '06:00 PM', label: '04:30 – 06:00 PM', shortLabel: '04:30–06:00 PM', shift: 'LATE AFTERNOON' },
-  { index: 7, code: 'P8', rawSlot: '06:00 - 07:30', start: '06:00 PM', end: '07:30 PM', label: '06:00 – 07:30 PM', shortLabel: '06:00–07:30 PM', shift: 'EVENING BLOCK' },
-  { index: 8, code: 'P9', rawSlot: '07:30 - 09:00', start: '07:30 PM', end: '09:00 PM', label: '07:30 – 09:00 PM', shortLabel: '07:30–09:00 PM', shift: 'EVENING BLOCK' }
+  { index: 0, code: 'P1', rawSlot: '07:30 - 09:00', start: '07:30 AM', end: '09:00 AM', startMin: 450,  endMin: 540,  label: '07:30 – 09:00 AM', shortLabel: '07:30–09:00 AM', shift: 'MORNING BLOCK' },
+  { index: 1, code: 'P2', rawSlot: '09:00 - 10:30', start: '09:00 AM', end: '10:30 AM', startMin: 540,  endMin: 630,  label: '09:00 – 10:30 AM', shortLabel: '09:00–10:30 AM', shift: 'MORNING BLOCK' },
+  { index: 2, code: 'P3', rawSlot: '10:30 - 12:00', start: '10:30 AM', end: '12:00 PM', startMin: 630,  endMin: 720,  label: '10:30 AM – 12:00 PM', shortLabel: '10:30–12:00 PM', shift: 'MORNING BLOCK' },
+  { index: 3, code: 'P4', rawSlot: '12:00 - 01:30', start: '12:00 PM', end: '01:30 PM', startMin: 720,  endMin: 810,  label: '12:00 – 01:30 PM', shortLabel: '12:00–01:30 PM', shift: 'MIDDAY BLOCK' },
+  { index: 4, code: 'P5', rawSlot: '01:30 - 03:00', start: '01:30 PM', end: '03:00 PM', startMin: 810,  endMin: 900,  label: '01:30 – 03:00 PM', shortLabel: '01:30–03:00 PM', shift: 'AFTERNOON BLOCK' },
+  { index: 5, code: 'P6', rawSlot: '03:00 - 04:30', start: '03:00 PM', end: '04:30 PM', startMin: 900,  endMin: 990,  label: '03:00 – 04:30 PM', shortLabel: '03:00–04:30 PM', shift: 'AFTERNOON BLOCK' },
+  { index: 6, code: 'P7', rawSlot: '04:30 - 06:00', start: '04:30 PM', end: '06:00 PM', startMin: 990,  endMin: 1080, label: '04:30 – 06:00 PM', shortLabel: '04:30–06:00 PM', shift: 'LATE AFTERNOON' },
+  { index: 7, code: 'P8', rawSlot: '06:00 - 07:30', start: '06:00 PM', end: '07:30 PM', startMin: 1080, endMin: 1170, label: '06:00 – 07:30 PM', shortLabel: '06:00–07:30 PM', shift: 'EVENING BLOCK' },
+  { index: 8, code: 'P9', rawSlot: '07:30 - 09:00', start: '07:30 PM', end: '09:00 PM', startMin: 1170, endMin: 1260, label: '07:30 – 09:00 PM', shortLabel: '07:30–09:00 PM', shift: 'EVENING BLOCK' }
 ];
 
 const DAY_SHORT_LABELS = {
@@ -148,6 +148,13 @@ const state = {
     instructor: 'ALL',
     search: '',
     viewMode: 'grid' // 'grid' or 'table'
+  },
+  liveAvailability: {
+    isOpen: false,
+    statusFilter: 'ONGOING', // 'ONGOING' (default: only classes matching current day & time), 'UPCOMING', 'ENDED', 'ALL_TODAY'
+    includeDuty: false,      // false = academic classes only, true = include office/consultation duty
+    lastDateKey: '',
+    lastPeriodKey: ''
   }
 };
 
@@ -156,6 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initIcons();
   loadInitialData();
   setupEventListeners();
+  initLiveClock();
 });
 
 function initIcons() {
@@ -476,6 +484,7 @@ function renderAll() {
   renderMasterSchedule();
   renderInstructorSchedule();
   renderRosterView();
+  updateLiveClockUI(true);
   initIcons();
 }
 
@@ -2203,4 +2212,567 @@ function exportScheduleToCsv() {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+/* =========================================================================
+   LIVE CLOCK & CURRENT CLASS AVAILABILITY ENGINE (Asia/Manila Timezone)
+   ========================================================================= */
+const MANILA_TIMEZONE = 'Asia/Manila';
+
+function getManilaTimeSnapshot() {
+  const now = window.__TEST_CLOCK_DATE ? new Date(window.__TEST_CLOCK_DATE) : new Date();
+
+  const timeFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: MANILA_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+
+  const dateFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: MANILA_TIMEZONE,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  const partsFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: MANILA_TIMEZONE,
+    weekday: 'long',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  });
+
+  const parts = {};
+  partsFormatter.formatToParts(now).forEach(p => {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  });
+
+  const dayOfWeek = (parts.weekday || 'MONDAY').toUpperCase();
+  const hour24 = parseInt(parts.hour || '0', 10) % 24;
+  const minute = parseInt(parts.minute || '0', 10);
+  const minutesFromMidnight = hour24 * 60 + minute;
+  const dateKey = `${parts.year}-${parts.month}-${parts.day}-${dayOfWeek}`;
+
+  const isAcademicDay = dayOfWeek !== 'SUNDAY';
+  const activePeriod = isAcademicDay
+    ? (PERIOD_DEFINITIONS.find(p => minutesFromMidnight >= p.startMin && minutesFromMidnight < p.endMin) || null)
+    : null;
+  const nextPeriod = isAcademicDay
+    ? (PERIOD_DEFINITIONS.find(p => p.startMin > minutesFromMidnight) || null)
+    : null;
+
+  return {
+    now,
+    timeDisplay: timeFormatter.format(now),
+    dateDisplay: dateFormatter.format(now).toUpperCase(),
+    dayOfWeek,
+    isAcademicDay,
+    minutesFromMidnight,
+    dateKey,
+    activePeriod,
+    nextPeriod
+  };
+}
+
+function getTodayScheduleBreakdown(snapshot) {
+  if (!state.data || !Array.isArray(state.data.sessions)) {
+    return {
+      hasScheduleData: false,
+      ongoing: [],
+      upcoming: [],
+      ended: [],
+      allToday: [],
+      ongoingDutyCount: 0
+    };
+  }
+
+  const includeDuty = Boolean(state.liveAvailability && state.liveAvailability.includeDuty);
+  const daySessionsAll = state.data.sessions.filter(s => s && s.day === snapshot.dayOfWeek);
+  const ongoingDutyCount = snapshot.activePeriod
+    ? daySessionsAll.filter(s => s.isDuty && getSessionPeriodIndex(s) === snapshot.activePeriod.index).length
+    : 0;
+
+  const daySessions = daySessionsAll.filter(s => includeDuty ? true : !s.isDuty);
+
+  const ongoing = [];
+  const upcoming = [];
+  const ended = [];
+  const allToday = [];
+
+  daySessions.forEach(s => {
+    const pIdx = getSessionPeriodIndex(s);
+    const periodDef = PERIOD_DEFINITIONS[pIdx] || PERIOD_DEFINITIONS[0];
+
+    let statusCode = 'ENDED';
+    let statusLabel = 'ALREADY ENDED';
+    let statusDetail = `Ended at ${periodDef.end}`;
+
+    if (snapshot.minutesFromMidnight >= periodDef.startMin && snapshot.minutesFromMidnight < periodDef.endMin) {
+      const rem = periodDef.endMin - snapshot.minutesFromMidnight;
+      statusCode = 'ONGOING';
+      statusLabel = 'ONGOING NOW';
+      statusDetail = `${rem} min remaining in ${periodDef.code}`;
+    } else if (snapshot.minutesFromMidnight < periodDef.startMin) {
+      const diff = periodDef.startMin - snapshot.minutesFromMidnight;
+      const hrs = Math.floor(diff / 60);
+      const mins = diff % 60;
+      statusCode = 'UPCOMING';
+      statusLabel = 'NOT STARTED YET';
+      statusDetail = hrs > 0 ? `Starts in ${hrs}h ${mins}m (${periodDef.start})` : `Starts in ${mins}m (${periodDef.start})`;
+    }
+
+    const enriched = {
+      session: s,
+      periodDef,
+      statusCode,
+      statusLabel,
+      statusDetail
+    };
+
+    allToday.push(enriched);
+    if (statusCode === 'ONGOING') ongoing.push(enriched);
+    else if (statusCode === 'UPCOMING') upcoming.push(enriched);
+    else ended.push(enriched);
+  });
+
+  const sortByPeriodAndSubject = (a, b) => {
+    if (a.periodDef.index !== b.periodDef.index) return a.periodDef.index - b.periodDef.index;
+    return String(a.session.subject || '').localeCompare(String(b.session.subject || ''));
+  };
+
+  ongoing.sort(sortByPeriodAndSubject);
+  upcoming.sort(sortByPeriodAndSubject);
+  ended.sort(sortByPeriodAndSubject);
+  allToday.sort(sortByPeriodAndSubject);
+
+  return {
+    hasScheduleData: true,
+    ongoing,
+    upcoming,
+    ended,
+    allToday,
+    ongoingDutyCount
+  };
+}
+
+let liveClockTimerId = null;
+
+function initLiveClock() {
+  const triggerEl = document.getElementById('live-clock-trigger');
+  if (triggerEl) {
+    triggerEl.addEventListener('click', () => {
+      toggleLiveAvailabilityPanel();
+    });
+    triggerEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleLiveAvailabilityPanel();
+      }
+    });
+  }
+
+  updateLiveClockUI(true);
+  if (liveClockTimerId) clearInterval(liveClockTimerId);
+  liveClockTimerId = setInterval(() => {
+    updateLiveClockUI(false);
+  }, 1000);
+}
+
+window.toggleLiveAvailabilityPanel = function(forceState) {
+  const nextOpen = typeof forceState === 'boolean' ? forceState : !state.liveAvailability.isOpen;
+  state.liveAvailability.isOpen = nextOpen;
+
+  if (nextOpen) {
+    // Default to showing strictly ongoing classes matching the current day and time when clicked
+    state.liveAvailability.statusFilter = 'ONGOING';
+  }
+
+  const triggerEl = document.getElementById('live-clock-trigger');
+  const panelEl = document.getElementById('live-availability-panel');
+  const chevronEl = document.getElementById('live-clock-chevron');
+  const ctaLabelEl = document.getElementById('live-clock-cta-label');
+
+  if (triggerEl) {
+    triggerEl.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+    if (nextOpen) {
+      triggerEl.classList.add('border-blue-600');
+    } else {
+      triggerEl.classList.remove('border-blue-600');
+    }
+  }
+
+  if (chevronEl) {
+    if (nextOpen) chevronEl.classList.add('rotate-180');
+    else chevronEl.classList.remove('rotate-180');
+  }
+
+  if (ctaLabelEl) {
+    ctaLabelEl.textContent = nextOpen ? 'Hide Live Schedule' : 'Check Current Classes';
+  }
+
+  if (panelEl) {
+    if (nextOpen) {
+      panelEl.classList.remove('hidden');
+      renderLiveAvailabilityPanel();
+    } else {
+      panelEl.classList.add('hidden');
+    }
+  }
+
+  initIcons();
+};
+
+window.setLiveAvailabilityFilter = function(filterMode) {
+  state.liveAvailability.statusFilter = filterMode;
+  renderLiveAvailabilityPanel();
+  initIcons();
+};
+
+window.toggleLiveIncludeDuty = function() {
+  state.liveAvailability.includeDuty = !state.liveAvailability.includeDuty;
+  updateLiveClockUI(true);
+  initIcons();
+};
+
+function updateLiveClockUI(forcePanelRefresh = false) {
+  const snapshot = getManilaTimeSnapshot();
+  const timeEl = document.getElementById('live-clock-time');
+  const dateEl = document.getElementById('live-clock-date');
+  const pulseEl = document.getElementById('live-clock-pulse');
+  const periodBadgeEl = document.getElementById('live-clock-period-badge');
+  const summaryTitleEl = document.getElementById('live-clock-summary-title');
+  const summarySubEl = document.getElementById('live-clock-summary-sub');
+
+  if (timeEl) timeEl.textContent = snapshot.timeDisplay;
+  if (dateEl) dateEl.textContent = snapshot.dateDisplay;
+
+  const breakdown = getTodayScheduleBreakdown(snapshot);
+  const periodKey = `${snapshot.dateKey}|${snapshot.activePeriod ? snapshot.activePeriod.code : 'NONE'}|${Math.floor(snapshot.minutesFromMidnight)}`;
+
+  if (!breakdown.hasScheduleData) {
+    if (periodBadgeEl) {
+      periodBadgeEl.className = 'px-2 py-0.5 text-[10.5px] font-mono font-bold bg-slate-100 text-slate-600 border border-slate-300';
+      periodBadgeEl.textContent = 'NO SCHEDULE LOADED';
+    }
+    if (summaryTitleEl) summaryTitleEl.textContent = 'No schedule dataset currently loaded';
+    if (summarySubEl) summarySubEl.textContent = 'Import a faculty timetable workbook or reset to sample data';
+  } else if (snapshot.activePeriod) {
+    const p = snapshot.activePeriod;
+    const ongoingCount = breakdown.ongoing.length;
+    if (pulseEl) {
+      pulseEl.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0';
+    }
+    if (periodBadgeEl) {
+      periodBadgeEl.className = 'px-2 py-0.5 text-[10.5px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-300';
+      periodBadgeEl.textContent = `${p.code} ACTIVE • ${p.shortLabel}`;
+    }
+    if (summaryTitleEl) {
+      summaryTitleEl.textContent = ongoingCount > 0
+        ? `${ongoingCount} ${ongoingCount === 1 ? 'class' : 'classes'} scheduled right now (${snapshot.dayOfWeek} • ${p.code})`
+        : `No classes scheduled in ${p.code} (${p.shortLabel}) on ${snapshot.dayOfWeek}`;
+    }
+    if (summarySubEl) {
+      summarySubEl.textContent = `${breakdown.upcoming.length} not started yet today • ${breakdown.ended.length} already ended today — Click clock to inspect`;
+    }
+  } else {
+    if (pulseEl) {
+      pulseEl.className = 'w-2 h-2 rounded-full bg-amber-400 shrink-0';
+    }
+    if (periodBadgeEl) {
+      periodBadgeEl.className = 'px-2 py-0.5 text-[10.5px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-300';
+      periodBadgeEl.textContent = snapshot.isAcademicDay ? 'OUTSIDE CLASS HOURS (07:30 AM – 09:00 PM)' : 'SUNDAY • NON-INSTRUCTIONAL DAY';
+    }
+    if (summaryTitleEl) {
+      summaryTitleEl.textContent = 'No classes scheduled right now — Click clock to check today\'s schedule status';
+    }
+    if (summarySubEl) {
+      if (!snapshot.isAcademicDay) {
+        summarySubEl.textContent = 'Regular academic classes are scheduled Monday through Saturday (P1 07:30 AM – P9 09:00 PM)';
+      } else if (snapshot.nextPeriod) {
+        summarySubEl.textContent = `Next period today: ${snapshot.nextPeriod.code} (${snapshot.nextPeriod.label}) • ${breakdown.upcoming.length} upcoming today`;
+      } else {
+        summarySubEl.textContent = `All ${breakdown.ended.length} scheduled classes for ${snapshot.dayOfWeek} have ended for today`;
+      }
+    }
+  }
+
+  if (state.liveAvailability.isOpen && (forcePanelRefresh || state.liveAvailability.lastPeriodKey !== periodKey)) {
+    state.liveAvailability.lastPeriodKey = periodKey;
+    renderLiveAvailabilityPanel();
+  }
+  state.liveAvailability.lastDateKey = snapshot.dateKey;
+}
+
+function renderLiveAvailabilityPanel() {
+  const panelEl = document.getElementById('live-availability-panel');
+  if (!panelEl) return;
+
+  const snapshot = getManilaTimeSnapshot();
+  const breakdown = getTodayScheduleBreakdown(snapshot);
+
+  if (!breakdown.hasScheduleData) {
+    panelEl.innerHTML = `
+      <div class="p-6 text-center bg-slate-50">
+        <div class="text-sm font-bold text-slate-900">No classes scheduled right now.</div>
+        <p class="text-xs text-slate-500 mt-1">Schedule data is currently unavailable. Please load or reset the department schedule dataset.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const activeFilter = state.liveAvailability.statusFilter || 'ONGOING';
+  const includeDuty = Boolean(state.liveAvailability.includeDuty);
+
+  let displayedItems = breakdown.ongoing;
+  let sectionTitle = `Classes Matching Current Day & Time (${snapshot.dayOfWeek} • ${snapshot.timeDisplay})`;
+  if (activeFilter === 'UPCOMING') {
+    displayedItems = breakdown.upcoming;
+    sectionTitle = `Classes Not Started Yet Today (${snapshot.dayOfWeek})`;
+  } else if (activeFilter === 'ENDED') {
+    displayedItems = breakdown.ended;
+    sectionTitle = `Classes Already Ended Today (${snapshot.dayOfWeek})`;
+  } else if (activeFilter === 'ALL_TODAY') {
+    displayedItems = breakdown.allToday;
+    sectionTitle = `All Scheduled Classes for ${snapshot.dayOfWeek} (By Schedule Status)`;
+  }
+
+  const renderStatusBadge = (item) => {
+    if (item.statusCode === 'ONGOING') {
+      return `
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10.5px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+          <span>ONGOING NOW</span>
+        </span>
+      `;
+    }
+    if (item.statusCode === 'UPCOMING') {
+      return `
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10.5px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-300">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+          <span>NOT STARTED YET</span>
+        </span>
+      `;
+    }
+    return `
+      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10.5px] font-mono font-bold bg-slate-100 text-slate-600 border border-slate-300">
+        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+        <span>ALREADY ENDED</span>
+      </span>
+    `;
+  };
+
+  panelEl.innerHTML = `
+    <!-- Panel Top Control & Status Bar -->
+    <div class="px-3.5 sm:px-5 py-3 bg-slate-100 border-b border-slate-300 flex flex-wrap items-center justify-between gap-2.5">
+      <div class="flex flex-wrap items-center gap-2 min-w-0">
+        <span class="px-2 py-0.5 text-[10.5px] font-mono font-bold bg-slate-900 text-white uppercase tracking-wider">
+          LIVE SCHEDULE CHECK
+        </span>
+        <span class="text-xs font-mono font-bold text-slate-800 tabular-nums">
+          ${snapshot.dayOfWeek} • ${snapshot.timeDisplay}
+        </span>
+        <span class="text-[11px] font-mono text-slate-500 hidden sm:inline">
+          (${snapshot.activePeriod ? `Active Period: ${snapshot.activePeriod.code} ${snapshot.activePeriod.label}` : 'Outside Active Period Window'})
+        </span>
+      </div>
+
+      <div class="flex items-center gap-2 ml-auto">
+        <button type="button"
+                onclick="toggleLiveIncludeDuty()"
+                aria-pressed="${includeDuty ? 'true' : 'false'}"
+                class="h-7 px-2.5 text-[11px] font-mono font-semibold border transition-colors cursor-pointer ${
+                  includeDuty
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }">
+          ${includeDuty ? 'Showing: Classes + Office Duty' : 'Showing: Academic Classes Only'}
+        </button>
+
+        <button type="button"
+                onclick="toggleLiveAvailabilityPanel(false)"
+                class="h-7 px-2.5 text-[11px] font-mono font-semibold bg-white hover:bg-slate-900 text-slate-700 hover:text-white border border-slate-300 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                aria-label="Close live class availability panel">
+          <span>Close</span>
+          <i data-lucide="x" class="w-3.5 h-3.5" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Status Distinction Filter Bar (Ongoing Now vs Not Started Yet vs Already Ended) -->
+    <div class="px-3.5 sm:px-5 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+        <button type="button"
+                onclick="setLiveAvailabilityFilter('ONGOING')"
+                aria-pressed="${activeFilter === 'ONGOING' ? 'true' : 'false'}"
+                class="h-7 px-2.5 text-[11px] font-mono border inline-flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer ${
+                  activeFilter === 'ONGOING'
+                    ? 'bg-emerald-700 text-white border-emerald-700 font-bold'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 font-medium'
+                }">
+          <span class="w-2 h-2 rounded-full ${activeFilter === 'ONGOING' ? 'bg-emerald-300' : 'bg-emerald-600'}"></span>
+          <span>Ongoing Right Now</span>
+          <span class="px-1.5 py-0.2 text-[10px] tabular-nums ${activeFilter === 'ONGOING' ? 'bg-emerald-900 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.ongoing.length}</span>
+        </button>
+
+        <button type="button"
+                onclick="setLiveAvailabilityFilter('UPCOMING')"
+                aria-pressed="${activeFilter === 'UPCOMING' ? 'true' : 'false'}"
+                class="h-7 px-2.5 text-[11px] font-mono border inline-flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer ${
+                  activeFilter === 'UPCOMING'
+                    ? 'bg-amber-700 text-white border-amber-700 font-bold'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 font-medium'
+                }">
+          <span class="w-2 h-2 rounded-full ${activeFilter === 'UPCOMING' ? 'bg-amber-200' : 'bg-amber-500'}"></span>
+          <span>Not Started Yet Today</span>
+          <span class="px-1.5 py-0.2 text-[10px] tabular-nums ${activeFilter === 'UPCOMING' ? 'bg-amber-900 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.upcoming.length}</span>
+        </button>
+
+        <button type="button"
+                onclick="setLiveAvailabilityFilter('ENDED')"
+                aria-pressed="${activeFilter === 'ENDED' ? 'true' : 'false'}"
+                class="h-7 px-2.5 text-[11px] font-mono border inline-flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer ${
+                  activeFilter === 'ENDED'
+                    ? 'bg-slate-800 text-white border-slate-800 font-bold'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 font-medium'
+                }">
+          <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+          <span>Already Ended Today</span>
+          <span class="px-1.5 py-0.2 text-[10px] tabular-nums ${activeFilter === 'ENDED' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.ended.length}</span>
+        </button>
+
+        <button type="button"
+                onclick="setLiveAvailabilityFilter('ALL_TODAY')"
+                aria-pressed="${activeFilter === 'ALL_TODAY' ? 'true' : 'false'}"
+                class="h-7 px-2.5 text-[11px] font-mono border inline-flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer ${
+                  activeFilter === 'ALL_TODAY'
+                    ? 'bg-blue-600 text-white border-blue-600 font-bold'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 font-medium'
+                }">
+          <span>All ${snapshot.dayOfWeek} Classes</span>
+          <span class="px-1.5 py-0.2 text-[10px] tabular-nums ${activeFilter === 'ALL_TODAY' ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.allToday.length}</span>
+        </button>
+      </div>
+
+      <div class="text-[11px] font-mono text-slate-500">
+        ${sectionTitle}
+      </div>
+    </div>
+
+    <!-- Main Body: Matching Classes or Friendly Empty State -->
+    <div class="p-3.5 sm:p-5">
+      ${displayedItems.length === 0 ? `
+        <div id="live-availability-empty" class="border border-dashed border-slate-300 bg-slate-50/70 p-6 sm:p-8 text-center">
+          <div class="max-w-md mx-auto flex flex-col items-center gap-2">
+            <div class="w-10 h-10 bg-white border border-slate-300 text-slate-600 flex items-center justify-center">
+              <i data-lucide="clock" class="w-5 h-5" aria-hidden="true"></i>
+            </div>
+            <h3 class="text-sm sm:text-base font-bold text-slate-900 mt-1">
+              ${activeFilter === 'ONGOING' ? 'No classes scheduled right now.' : `No classes in "${activeFilter}" status for ${snapshot.dayOfWeek}.`}
+            </h3>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              ${!snapshot.isAcademicDay
+                ? `Today is ${snapshot.dayOfWeek}. Departmental classes are scheduled Monday through Saturday between 07:30 AM and 09:00 PM.`
+                : !snapshot.activePeriod
+                  ? `Current local time is ${snapshot.timeDisplay} (${snapshot.dayOfWeek}), which is outside the scheduled academic periods (07:30 AM – 09:00 PM).`
+                  : `No ${includeDuty ? 'sessions' : 'academic classes'} are scheduled during ${snapshot.activePeriod.code} (${snapshot.activePeriod.label}) on ${snapshot.dayOfWeek}.`
+              }
+            </p>
+            ${snapshot.isAcademicDay && activeFilter === 'ONGOING' && (breakdown.upcoming.length > 0 || breakdown.ended.length > 0) ? `
+              <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
+                ${breakdown.upcoming.length > 0 ? `
+                  <button type="button" onclick="setLiveAvailabilityFilter('UPCOMING')" class="h-8 px-3 text-xs font-mono font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors cursor-pointer">
+                    View ${breakdown.upcoming.length} Not Started Yet Today →
+                  </button>
+                ` : ''}
+                ${breakdown.ended.length > 0 ? `
+                  <button type="button" onclick="setLiveAvailabilityFilter('ENDED')" class="h-8 px-3 text-xs font-mono font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-colors cursor-pointer">
+                    View ${breakdown.ended.length} Already Ended Today (${snapshot.dayOfWeek}) →
+                  </button>
+                ` : ''}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      ` : `
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-3 max-h-[420px] overflow-y-auto pr-1">
+          ${displayedItems.map(item => {
+            const s = item.session;
+            const pDef = item.periodDef;
+            const color = getInstructorColor(s.instructor);
+            const leftBarColor = s.isDuty ? '#64748B' : color.ring;
+            const displaySubject = s.isDuty ? (s.dutyName || s.subject.replace(/\s*\(Office Duty\)/i, '')) : s.subject;
+            const displaySection = s.isDuty ? 'Office Duty' : (s.section && s.section !== '-' ? `Sec ${s.section}` : 'Lec / Lab');
+
+            return `
+              <div class="border border-slate-300 bg-white p-3 flex flex-col justify-between gap-2 hover:border-slate-400 transition-colors"
+                   style="border-left: 4px solid ${leftBarColor}">
+                <div>
+                  <!-- Top Row: Class Name + Section & Live Schedule Status Badge -->
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-sm font-bold text-slate-900">${displaySubject}</span>
+                        <span class="text-[11px] font-mono font-semibold px-1.5 py-0.2 bg-blue-50 text-blue-800 border border-blue-200">${displaySection}</span>
+                      </div>
+                    </div>
+                    <div class="shrink-0">
+                      ${renderStatusBadge(item)}
+                    </div>
+                  </div>
+
+                  <!-- Middle Row: Start Time, End Time & Assigned Room -->
+                  <div class="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs font-mono">
+                    <div class="min-w-0">
+                      <div class="text-[9.5px] uppercase tracking-wider text-slate-400 font-semibold">START – END TIME</div>
+                      <div class="text-[11.5px] font-bold text-slate-900 tabular-nums mt-0.5 whitespace-nowrap">
+                        <span class="px-1 py-0.2 bg-slate-900 text-white text-[10px] mr-1">${pDef.code}</span>${pDef.start} – ${pDef.end}
+                      </div>
+                    </div>
+                    <div class="text-right shrink-0">
+                      <div class="text-[9.5px] uppercase tracking-wider text-slate-400 font-semibold">ASSIGNED ROOM</div>
+                      <div class="mt-0.5">
+                        <button type="button"
+                                onclick="viewRoomFromSchedule('${escapeHtmlAttr(s.room)}')"
+                                class="px-1.5 py-0.5 text-[11px] font-mono font-bold bg-slate-100 hover:bg-slate-900 text-slate-800 hover:text-white border border-slate-300 transition-colors cursor-pointer whitespace-nowrap">
+                          ${s.room}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Bottom Row: Instructor & Timing Detail -->
+                <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                  <button type="button"
+                          onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')"
+                          class="font-semibold text-slate-800 hover:text-blue-700 flex items-center gap-1.5 truncate cursor-pointer"
+                          title="Open ${escapeHtmlAttr(s.instructor)}'s timetable">
+                    <span class="w-2 h-2 rounded-xs shrink-0" style="background-color: ${leftBarColor}"></span>
+                    <span class="truncate">${s.instructor}</span>
+                  </button>
+                  <span class="font-mono text-[10.5px] text-slate-500 shrink-0 tabular-nums">${item.statusDetail}</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `}
+
+      <!-- Schedule Status Integrity Note -->
+      <div class="mt-3 pt-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-500">
+        <span>NOTE: Statuses reflect official department timetable hours (${MANILA_TIMEZONE}) and do not confirm physical room vacancy or attendance.</span>
+        <span>TODAY'S SUMMARY: ${breakdown.ongoing.length} ONGOING • ${breakdown.upcoming.length} NOT STARTED YET • ${breakdown.ended.length} ENDED</span>
+      </div>
+    </div>
+  `;
+
+  initIcons();
 }
