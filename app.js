@@ -935,7 +935,7 @@ function updateInstructorQuickBadge() {
 }
 
 // Format standardized time period for left column axis
-function formatPeriodAxisCell(periodDef) {
+function formatPeriodAxisCell(periodDef, isCurrentPeriod = false) {
   if (!periodDef) return '';
   const shiftLabel = periodDef.shift === 'MORNING BLOCK'
     ? 'Morning'
@@ -949,14 +949,93 @@ function formatPeriodAxisCell(periodDef) {
 
   return `
     <div class="flex flex-col leading-snug">
-      <div class="flex items-center gap-1.5">
-        <span class="px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-slate-200/80 text-slate-800">${periodDef.code}</span>
-        <span class="text-[11px] font-medium text-slate-500">${shiftLabel}</span>
+      <div class="flex items-center justify-between gap-1.5">
+        <div class="flex items-center gap-1.5">
+          <span class="px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold ${
+            isCurrentPeriod
+              ? 'bg-emerald-600 text-white'
+              : 'bg-slate-200/80 text-slate-800'
+          }">${periodDef.code}</span>
+          <span class="text-[11px] font-medium ${isCurrentPeriod ? 'text-emerald-700 font-semibold' : 'text-slate-500'}">${shiftLabel}</span>
+        </div>
+        ${isCurrentPeriod ? `
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0" title="Current active academic period">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>NOW</span>
+          </span>
+        ` : ''}
       </div>
-      <span class="text-xs font-mono font-semibold text-slate-900 tabular-nums mt-1">${periodDef.start}</span>
+      <span class="text-xs font-mono font-semibold ${isCurrentPeriod ? 'text-emerald-800' : 'text-slate-900'} tabular-nums mt-1">${periodDef.start}</span>
       <span class="text-[11px] font-mono text-slate-500 tabular-nums">to ${periodDef.end}</span>
     </div>
   `;
+}
+
+// Reusable Live Current Schedule Matching Helpers
+function isSessionHappeningNow(session, snapshot) {
+  if (!session || !snapshot || !snapshot.isAcademicDay || !snapshot.activePeriod) return false;
+  return session.day === snapshot.dayOfWeek && getSessionPeriodIndex(session) === snapshot.activePeriod.index;
+}
+
+function getFacultyLiveScheduleStatus(faculty, snapshot) {
+  if (!faculty || !Array.isArray(faculty.sessions) || !snapshot) {
+    return {
+      mode: 'NONE',
+      activeSessions: [],
+      nextSession: null,
+      nextPeriodDef: null,
+      remainingMin: 0,
+      progressPercent: 0
+    };
+  }
+
+  const todaySessions = faculty.sessions.filter(s => s && s.day === snapshot.dayOfWeek);
+  const activePeriod = snapshot.activePeriod;
+  const activeSessions = activePeriod
+    ? todaySessions.filter(s => getSessionPeriodIndex(s) === activePeriod.index)
+    : [];
+
+  let remainingMin = 0;
+  let progressPercent = 0;
+  if (activePeriod) {
+    remainingMin = Math.max(1, activePeriod.endMin - snapshot.minutesFromMidnight);
+    const duration = Math.max(1, activePeriod.endMin - activePeriod.startMin);
+    progressPercent = Math.min(100, Math.max(0, Math.round(((snapshot.minutesFromMidnight - activePeriod.startMin) / duration) * 100)));
+  }
+
+  // Find next upcoming session today
+  let nextSession = null;
+  let nextPeriodDef = null;
+  if (snapshot.isAcademicDay) {
+    const upcomingToday = todaySessions
+      .map(s => ({ session: s, periodDef: PERIOD_DEFINITIONS[getSessionPeriodIndex(s)] || PERIOD_DEFINITIONS[0] }))
+      .filter(item => item.periodDef.startMin > snapshot.minutesFromMidnight)
+      .sort((a, b) => a.periodDef.index - b.periodDef.index);
+    if (upcomingToday.length > 0) {
+      nextSession = upcomingToday[0].session;
+      nextPeriodDef = upcomingToday[0].periodDef;
+    }
+  }
+
+  let mode = 'OUTSIDE_HOURS';
+  if (activePeriod) {
+    if (activeSessions.length > 1) {
+      mode = 'ACTIVE_MULTIPLE';
+    } else if (activeSessions.length === 1) {
+      mode = activeSessions[0].isDuty ? 'ACTIVE_DUTY' : 'ACTIVE_CLASS';
+    } else {
+      mode = 'NO_CURRENT_ACTIVITY';
+    }
+  }
+
+  return {
+    mode,
+    activeSessions,
+    nextSession,
+    nextPeriodDef,
+    remainingMin,
+    progressPercent
+  };
 }
 
 // Render Room Pills with real-time search & conflict alerts
@@ -1712,12 +1791,117 @@ function renderInstructorSchedule() {
     return;
   }
 
+  const snapshot = getManilaTimeSnapshot();
+  const liveStatus = getFacultyLiveScheduleStatus(faculty, snapshot);
+
   const instColor = getInstructorColor(faculty.name);
   const academicSessions = (faculty.sessions || []).filter(s => !s.isDuty);
   const dutySessions = (faculty.sessions || []).filter(s => s.isDuty);
   const assignedRooms = [...new Set(academicSessions.map(s => s.room).filter(r => r && r !== 'OFFICE / DEPT'))];
   const uniqueSubjects = [...new Set(academicSessions.map(s => s.subject).filter(Boolean))];
   const isFT = faculty.status && (faculty.status.includes('FT') || faculty.status.toUpperCase().includes('FULL-TIME'));
+
+  // Build Live Faculty Schedule Status Banner for Instructor Profile Card
+  let liveProfileBannerHtml = '';
+  if (snapshot.activePeriod) {
+    const p = snapshot.activePeriod;
+    if (liveStatus.mode === 'ACTIVE_CLASS') {
+      const s = liveStatus.activeSessions[0];
+      const secText = s.section && s.section !== '-' ? `Sec ${s.section}` : 'Lec / Lab';
+      liveProfileBannerHtml = `
+        <div id="faculty-live-status-banner" data-live-status="ACTIVE_CLASS" class="mt-3 px-3 py-2 rounded-md bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex flex-wrap items-center gap-2 min-w-0">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10.5px] font-mono font-semibold bg-emerald-600 text-white shrink-0">
+              <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+              <span>HAPPENING NOW</span>
+            </span>
+            <span class="font-semibold text-slate-900">${s.subject}</span>
+            <span class="font-mono text-emerald-800">${secText}</span>
+            <span class="text-slate-400">•</span>
+            <span class="font-mono font-medium text-slate-700">Room ${s.room}</span>
+          </div>
+          <div class="font-mono text-[11px] font-medium text-emerald-800 tabular-nums shrink-0">
+            ${p.code} (${p.shortLabel}) • ${liveStatus.remainingMin}m left
+          </div>
+        </div>
+      `;
+    } else if (liveStatus.mode === 'ACTIVE_DUTY') {
+      const s = liveStatus.activeSessions[0];
+      const dutyTitle = s.dutyName || s.subject.replace(/\s*\(Office Duty\)/i, '');
+      const dutyRoom = s.room === 'OFFICE / DEPT' ? 'Department / Office' : s.room;
+      liveProfileBannerHtml = `
+        <div id="faculty-live-status-banner" data-live-status="ACTIVE_DUTY" class="mt-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex flex-wrap items-center gap-2 min-w-0">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10.5px] font-mono font-semibold bg-amber-600 text-white shrink-0">
+              <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+              <span>HAPPENING NOW</span>
+            </span>
+            <span class="px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-amber-100 text-amber-900 border border-amber-300">Office Duty</span>
+            <span class="font-semibold text-slate-900">${dutyTitle}</span>
+            <span class="text-slate-400">•</span>
+            <span class="font-mono font-medium text-slate-700">${dutyRoom}</span>
+          </div>
+          <div class="font-mono text-[11px] font-medium text-amber-900 tabular-nums shrink-0">
+            ${p.code} (${p.shortLabel}) • ${liveStatus.remainingMin}m left
+          </div>
+        </div>
+      `;
+    } else if (liveStatus.mode === 'ACTIVE_MULTIPLE') {
+      const summaryItems = liveStatus.activeSessions.map(s => {
+        const label = s.isDuty ? `${s.dutyName || s.subject} (Office Duty)` : `${s.subject} (${s.room})`;
+        return label;
+      }).join(' & ');
+      liveProfileBannerHtml = `
+        <div id="faculty-live-status-banner" data-live-status="ACTIVE_MULTIPLE" class="mt-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex flex-wrap items-center gap-2 min-w-0">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10.5px] font-mono font-semibold bg-red-600 text-white shrink-0">
+              <i data-lucide="alert-triangle" class="w-3 h-3" aria-hidden="true"></i>
+              <span>HAPPENING NOW • ${liveStatus.activeSessions.length} OVERLAPPING</span>
+            </span>
+            <span class="font-semibold text-red-900">${summaryItems}</span>
+          </div>
+          <div class="font-mono text-[11px] font-medium text-red-800 tabular-nums shrink-0">
+            ${p.code} (${p.shortLabel}) • ${liveStatus.remainingMin}m left
+          </div>
+        </div>
+      `;
+    } else {
+      const nextHint = liveStatus.nextSession && liveStatus.nextPeriodDef
+        ? `Next today: ${liveStatus.nextSession.isDuty ? (liveStatus.nextSession.dutyName || liveStatus.nextSession.subject) : liveStatus.nextSession.subject} at ${liveStatus.nextPeriodDef.start} (${liveStatus.nextPeriodDef.code})`
+        : `No remaining scheduled sessions for ${snapshot.dayTitle}`;
+      liveProfileBannerHtml = `
+        <div id="faculty-live-status-banner" data-live-status="NO_CURRENT_ACTIVITY" class="mt-3 px-3 py-2 rounded-md bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex flex-wrap items-center gap-2 min-w-0">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10.5px] font-mono font-medium bg-slate-200/80 text-slate-700 shrink-0">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+              <span>${p.code} NOW</span>
+            </span>
+            <span class="font-medium text-slate-700">No scheduled activity right now</span>
+            <span class="text-slate-400 hidden sm:inline">•</span>
+            <span class="text-slate-500">${nextHint}</span>
+          </div>
+          <div class="font-mono text-[11px] text-slate-500 tabular-nums shrink-0">
+            ${snapshot.dayTitle} • ${p.shortLabel}
+          </div>
+        </div>
+      `;
+    }
+  } else {
+    const outsideReason = !snapshot.isAcademicDay
+      ? 'Sunday (non-instructional day)'
+      : snapshot.nextPeriod
+        ? `Before academic hours (starts at ${snapshot.nextPeriod.start})`
+        : 'Outside scheduled academic hours (concluded at 9:00 PM)';
+    liveProfileBannerHtml = `
+      <div id="faculty-live-status-banner" data-live-status="OUTSIDE_HOURS" class="mt-3 px-3 py-1.5 rounded-md bg-slate-50/80 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <div class="flex items-center gap-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span>
+          <span>No active schedule right now — ${outsideReason}</span>
+        </div>
+        <span class="font-mono text-[11px] tabular-nums">${snapshot.dayTitle}</span>
+      </div>
+    `;
+  }
 
   if (profileContainer) {
     profileContainer.innerHTML = `
@@ -1758,6 +1942,8 @@ function renderInstructorSchedule() {
                   `).join('')}
                 </div>
               ` : ''}
+
+              ${liveProfileBannerHtml}
             </div>
           </div>
         </div>
@@ -1808,27 +1994,33 @@ function renderInstructorSchedule() {
         ${days.map(d => {
           const dCount = (faculty.sessions || []).filter(s => s.day === d).length;
           const isSel = activeMobileDay === d;
+          const isToday = snapshot.isAcademicDay && snapshot.dayOfWeek === d;
           return `
-            <button type="button" onclick="selectInstructorMobileDay('${d}')" class="h-7 px-2.5 rounded-md text-xs border shrink-0 transition-colors cursor-pointer ${
+            <button type="button" onclick="selectInstructorMobileDay('${d}')" class="h-7 px-2.5 rounded-md text-xs border shrink-0 inline-flex items-center gap-1 transition-colors cursor-pointer ${
               isSel ? 'bg-blue-700 text-white border-blue-700 font-semibold' : 'bg-white text-slate-700 border-slate-200 font-medium'
             }">
-              ${DAY_SHORT_LABELS[d]} (${dCount})
+              <span>${DAY_SHORT_LABELS[d]} (${dCount})</span>
+              ${isToday ? `<span class="w-1.5 h-1.5 rounded-full ${isSel ? 'bg-emerald-300' : 'bg-emerald-500'}"></span>` : ''}
             </button>
           `;
         }).join('')}
       </div>
 
       ${mobileDays.map(d => {
+        const isToday = snapshot.isAcademicDay && snapshot.dayOfWeek === d;
         const dayEntries = [];
         PERIOD_DEFINITIONS.forEach((periodDef, pIdx) => {
           const matched = (faculty.sessions || []).filter(s => s.day === d && getSessionPeriodIndex(s) === pIdx);
-          matched.forEach(s => dayEntries.push({ session: s, periodDef }));
+          matched.forEach(s => dayEntries.push({ session: s, periodDef, slotCount: matched.length }));
         });
 
         return `
-          <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
-            <div class="bg-slate-100/90 border-b border-slate-200 text-slate-900 px-3.5 py-2 flex items-center justify-between text-xs">
-              <span class="font-semibold">${DAY_TITLE_LABELS[d]}</span>
+          <div class="rounded-lg border ${isToday ? 'border-blue-300' : 'border-slate-200'} bg-white overflow-hidden">
+            <div class="${isToday ? 'live-today-header' : 'bg-slate-100/90'} border-b border-slate-200 text-slate-900 px-3.5 py-2 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-semibold">${DAY_TITLE_LABELS[d]}</span>
+                ${isToday ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-700 text-white">TODAY</span>' : ''}
+              </div>
               <span class="px-2 py-0.5 rounded text-[11px] bg-white ${dayEntries.length > 0 ? 'text-slate-800 font-medium' : 'text-slate-400'} border border-slate-200">${dayEntries.length} ${dayEntries.length === 1 ? 'session' : 'sessions'}</span>
             </div>
             ${dayEntries.length === 0 ? `
@@ -1837,13 +2029,35 @@ function renderInstructorSchedule() {
               </div>
             ` : `
               <div class="divide-y divide-slate-100">
-                ${dayEntries.map(({ session: s, periodDef }) => {
-                  const leftBar = s.isDuty ? '#94A3B8' : instColor.ring;
+                ${dayEntries.map(({ session: s, periodDef, slotCount }) => {
+                  const isActiveNow = isSessionHappeningNow(s, snapshot);
+                  const isOverlap = slotCount > 1;
+                  const leftBar = isActiveNow
+                    ? (isOverlap ? '#DC2626' : (s.isDuty ? '#D97706' : '#059669'))
+                    : (s.isDuty ? '#94A3B8' : instColor.ring);
+                  const activeCardClass = isActiveNow
+                    ? (isOverlap ? 'live-active-conflict live-active-schedule-card' : (s.isDuty ? 'live-active-duty live-active-schedule-card' : 'live-active-class live-active-schedule-card'))
+                    : (s.isDuty ? 'bg-slate-50/80' : 'bg-white');
                   const displaySubject = s.isDuty ? (s.dutyName || s.subject.replace(/\s*\(Office Duty\)/i, '')) : s.subject;
                   const displayRoom = s.room === 'OFFICE / DEPT' ? 'Dept' : s.room;
                   const displaySection = s.isDuty ? 'Office Duty' : (s.section && s.section !== '-' ? `Sec ${s.section}` : 'Lec / Lab');
                   return `
-                    <div class="px-3.5 py-2.5 ${s.isDuty ? 'bg-slate-50/80' : 'bg-white'} flex flex-col gap-1" style="border-left: 3px solid ${leftBar}">
+                    <div data-active-now="${isActiveNow ? 'true' : 'false'}" data-schedule-type="${s.isDuty ? 'duty' : 'class'}" class="px-3.5 py-2.5 ${activeCardClass} flex flex-col gap-1" style="border-left: ${isActiveNow ? '4px' : '3px'} solid ${leftBar}">
+                      ${isActiveNow ? `
+                        <div class="flex items-center justify-between gap-2 pb-1 mb-0.5 border-b ${s.isDuty ? 'border-amber-200/80' : 'border-emerald-200/80'}">
+                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ${
+                            isOverlap
+                              ? 'bg-red-600 text-white'
+                              : s.isDuty
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-emerald-600 text-white'
+                          }">
+                            <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                            <span>HAPPENING NOW</span>
+                          </span>
+                          <span class="font-mono text-[10.5px] font-semibold ${s.isDuty ? 'text-amber-800' : 'text-emerald-800'} tabular-nums">${liveStatus.remainingMin}m left</span>
+                        </div>
+                      ` : ''}
                       <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2 font-mono">
                           <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">${periodDef.code}</span>
@@ -1854,8 +2068,8 @@ function renderInstructorSchedule() {
                         </button>
                       </div>
                       <div class="flex items-center justify-between gap-2 mt-0.5">
-                        <span class="text-sm font-semibold ${s.isDuty ? 'text-slate-600' : 'text-slate-900'}">${displaySubject}</span>
-                        <span class="text-xs font-mono ${s.isDuty ? 'text-slate-500' : 'text-blue-700 font-medium'}">${displaySection}</span>
+                        <span class="text-sm font-semibold ${s.isDuty ? 'text-slate-700' : 'text-slate-900'}">${displaySubject}</span>
+                        <span class="text-xs font-mono ${s.isDuty ? 'text-amber-800 font-medium' : 'text-blue-700 font-medium'}">${displaySection}</span>
                       </div>
                     </div>
                   `;
@@ -1875,10 +2089,14 @@ function renderInstructorSchedule() {
             <th class="py-3 px-3.5 w-[132px] min-w-[132px] border-r border-slate-200 sticky left-0 bg-slate-50 z-10 sticky-time-col">Period / Time</th>
             ${days.map(d => {
               const dCount = (faculty.sessions || []).filter(s => s.day === d).length;
+              const isToday = snapshot.isAcademicDay && snapshot.dayOfWeek === d;
               return `
-                <th class="py-3 px-3 min-w-[162px] border-r border-slate-200 last:border-r-0">
+                <th class="py-3 px-3 min-w-[162px] border-r border-slate-200 last:border-r-0 ${isToday ? 'live-today-header' : ''}">
                   <div class="flex items-center justify-between gap-1.5">
-                    <span>${DAY_TITLE_LABELS[d]}</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="${isToday ? 'text-blue-700 font-bold' : ''}">${DAY_TITLE_LABELS[d]}</span>
+                      ${isToday ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-700 text-white leading-none">TODAY</span>' : ''}
+                    </div>
                     ${dCount > 0 ? `<span class="text-[11px] font-mono font-medium px-1.5 py-0.2 rounded bg-slate-200/70 text-slate-700 tabular-nums">${dCount}</span>` : ''}
                   </div>
                 </th>
@@ -1890,50 +2108,114 @@ function renderInstructorSchedule() {
   `;
 
   PERIOD_DEFINITIONS.forEach((periodDef, pIdx) => {
+    const isCurrentPeriod = Boolean(snapshot.activePeriod && snapshot.activePeriod.index === pIdx);
     const rowBg = pIdx % 2 === 1 ? 'bg-slate-50/35' : 'bg-white';
     html += `
-      <tr class="${rowBg}">
+      <tr class="${rowBg}" data-period-code="${periodDef.code}" data-current-period="${isCurrentPeriod ? 'true' : 'false'}">
         <td class="py-2.5 px-3.5 border-r border-slate-200 sticky left-0 ${pIdx % 2 === 1 ? 'bg-[#F8FAFC]' : 'bg-white'} z-10 align-top sticky-time-col">
-          ${formatPeriodAxisCell(periodDef)}
+          ${formatPeriodAxisCell(periodDef, isCurrentPeriod)}
         </td>
     `;
 
     days.forEach(day => {
+      const isToday = snapshot.isAcademicDay && snapshot.dayOfWeek === day;
+      const isCurrentSlot = isToday && isCurrentPeriod;
       const matched = faculty.sessions.filter(s => s.day === day && getSessionPeriodIndex(s) === pIdx);
+
+      // Subtle current-time progress indicator inside today's active period slot
+      const currentTimeMarkerHtml = isCurrentSlot ? `
+        <div class="live-time-marker mb-1.5" title="Current time (${snapshot.timeDisplay}) — ${liveStatus.progressPercent}% through ${periodDef.code}">
+          <div class="flex items-center justify-between text-[10px] font-mono text-emerald-700 mb-0.5 leading-none">
+            <span class="inline-flex items-center gap-1 font-semibold">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span>${snapshot.timeDisplay.replace(/:\d{2}\s/, ' ')}</span>
+            </span>
+            <span class="tabular-nums">${liveStatus.remainingMin}m left</span>
+          </div>
+          <div class="w-full h-1 rounded-full bg-slate-200/90 overflow-hidden">
+            <div class="h-full rounded-full bg-emerald-500" style="width: ${liveStatus.progressPercent}%"></div>
+          </div>
+        </div>
+      ` : '';
+
       if (matched.length === 0) {
         html += `
-          <td class="p-1.5 border-r border-slate-200/80 last:border-r-0 align-top">
-            <div class="h-14"></div>
+          <td class="p-1.5 border-r border-slate-200/80 last:border-r-0 align-top ${isCurrentSlot ? 'live-slot-cell' : ''}" data-day="${day}" data-period="${periodDef.code}" data-current-slot="${isCurrentSlot ? 'true' : 'false'}">
+            ${isCurrentSlot ? `
+              <div class="min-h-[58px] px-2 py-1.5 rounded-md border border-dashed border-slate-300 bg-white/70 flex flex-col justify-between" data-empty-current-slot="true">
+                ${currentTimeMarkerHtml}
+                <div class="text-[11px] font-medium text-slate-500 leading-snug">
+                  No scheduled activity right now
+                </div>
+              </div>
+            ` : `
+              <div class="h-14"></div>
+            `}
           </td>
         `;
       } else {
+        const isOverlapSlot = matched.length > 1;
         html += `
-          <td class="p-1.5 border-r border-slate-200/80 last:border-r-0 align-top">
+          <td class="p-1.5 border-r border-slate-200/80 last:border-r-0 align-top ${isCurrentSlot ? 'live-slot-cell' : ''}" data-day="${day}" data-period="${periodDef.code}" data-current-slot="${isCurrentSlot ? 'true' : 'false'}">
+            ${currentTimeMarkerHtml}
             <div class="space-y-1.5">
               ${matched.map(s => {
-                const leftBar = s.isDuty ? '#94A3B8' : instColor.ring;
+                const isActiveNow = isSessionHappeningNow(s, snapshot);
+                const leftBar = isActiveNow
+                  ? (isOverlapSlot ? '#DC2626' : (s.isDuty ? '#D97706' : '#059669'))
+                  : (s.isDuty ? '#94A3B8' : instColor.ring);
                 const displaySubject = s.isDuty ? (s.dutyName || s.subject.replace(/\s*\(Office Duty\)/i, '')) : s.subject;
                 const displayRoom = s.room === 'OFFICE / DEPT' ? 'Dept' : s.room;
                 const displaySection = s.isDuty ? 'Office Duty' : (s.section && s.section !== '-' ? `Sec ${s.section}` : 'Lec / Lab');
+
+                const cardClasses = isActiveNow
+                  ? (isOverlapSlot
+                      ? 'live-active-conflict live-active-schedule-card border-red-300 text-slate-900'
+                      : s.isDuty
+                        ? 'live-active-duty live-active-schedule-card border-amber-300 text-slate-800'
+                        : 'live-active-class live-active-schedule-card border-emerald-300 text-slate-900')
+                  : s.isDuty
+                    ? 'bg-slate-50/90 border-slate-200 text-slate-600'
+                    : 'bg-white border-slate-200/95 hover:border-blue-300 transition-colors';
+
                 return `
-                  <div class="min-h-[58px] px-2.5 py-2 rounded-md flex flex-col justify-between border shadow-2xs ${
-                    s.isDuty
-                      ? 'bg-slate-50/90 border-slate-200 text-slate-600'
-                      : 'bg-white border-slate-200/95 hover:border-blue-300 transition-colors'
-                  }" style="border-left: 3px solid ${leftBar}">
+                  <div data-active-now="${isActiveNow ? 'true' : 'false'}"
+                       data-schedule-type="${s.isDuty ? 'duty' : 'class'}"
+                       data-Overlap="${isOverlapSlot ? 'true' : 'false'}"
+                       class="min-h-[58px] px-2.5 py-2 rounded-md flex flex-col justify-between border shadow-2xs ${cardClasses}"
+                       style="border-left: ${isActiveNow ? '4px' : '3px'} solid ${leftBar}">
+                    ${isActiveNow ? `
+                      <div class="flex items-center justify-between gap-1 pb-1 mb-1 border-b ${
+                        isOverlapSlot ? 'border-red-200/80' : s.isDuty ? 'border-amber-200/80' : 'border-emerald-200/80'
+                      }">
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-mono font-semibold leading-none ${
+                          isOverlapSlot
+                            ? 'bg-red-600 text-white'
+                            : s.isDuty
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-emerald-600 text-white'
+                        }">
+                          <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                          <span>HAPPENING NOW</span>
+                        </span>
+                        ${isOverlapSlot ? `
+                          <span class="px-1 py-0.5 rounded text-[9px] font-mono font-semibold bg-red-100 text-red-800 leading-none">OVERLAP</span>
+                        ` : ''}
+                      </div>
+                    ` : ''}
                     <div class="flex items-center justify-between gap-1.5 min-w-0">
-                      <span class="font-semibold text-[13px] ${s.isDuty ? 'text-slate-600' : 'text-slate-900'} truncate" title="${escapeHtmlAttr(s.subject)}">${displaySubject}</span>
+                      <span class="font-semibold text-[13px] ${s.isDuty && !isActiveNow ? 'text-slate-600' : 'text-slate-900'} truncate" title="${escapeHtmlAttr(s.subject)}">${displaySubject}</span>
                       ${s.isDuty ? `
-                        <span class="px-1.5 py-0.5 rounded font-mono text-[10px] font-medium bg-slate-200/70 text-slate-600 shrink-0 leading-none">${displayRoom}</span>
+                        <span class="px-1.5 py-0.5 rounded font-mono text-[10px] font-medium ${isActiveNow ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-200/70 text-slate-600'} shrink-0 leading-none">${displayRoom}</span>
                       ` : `
                         <button type="button" onclick="viewRoomFromSchedule('${escapeHtmlAttr(s.room)}')" title="Inspect room ${escapeHtmlAttr(s.room)}" class="px-1.5 py-0.5 rounded font-mono text-[10.5px] font-medium bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200/80 shrink-0 leading-none cursor-pointer transition-colors">
                           ${displayRoom}
                         </button>
                       `}
                     </div>
-                    <div class="text-[11px] flex justify-between items-center pt-1.5 mt-1 border-t border-slate-100">
-                      <span class="font-medium ${s.isDuty ? 'text-slate-500' : 'text-blue-700'} truncate">${displaySection}</span>
-                      <span class="font-mono text-[10px] text-slate-400 tabular-nums shrink-0">${periodDef.shortLabel}</span>
+                    <div class="text-[11px] flex justify-between items-center pt-1.5 mt-1 border-t ${isActiveNow ? (s.isDuty ? 'border-amber-200/60' : 'border-emerald-200/60') : 'border-slate-100'}">
+                      <span class="font-medium ${s.isDuty ? (isActiveNow ? 'text-amber-900 font-semibold' : 'text-slate-500') : 'text-blue-700'} truncate">${displaySection}</span>
+                      <span class="font-mono text-[10px] ${isActiveNow ? 'text-slate-700 font-medium' : 'text-slate-400'} tabular-nums shrink-0">${periodDef.shortLabel}</span>
                     </div>
                   </div>
                 `;
@@ -2611,6 +2893,15 @@ function updateLiveClockUI(forcePanelRefresh = false) {
     renderLiveAvailabilityPanel();
   }
   state.liveAvailability.lastDateKey = snapshot.dateKey;
+
+  // Keep live timetable schedule highlighting synchronized across minute / period / date transitions
+  const minuteKey = `${snapshot.dateKey}|${snapshot.minutesFromMidnight}`;
+  if (state.liveAvailability && state.liveAvailability.lastMinuteKey !== minuteKey) {
+    state.liveAvailability.lastMinuteKey = minuteKey;
+    if (state.activeTab === 'instructor' && state.selectedInstructor) {
+      renderInstructorSchedule();
+    }
+  }
 }
 
 function renderLiveAvailabilityPanel() {
