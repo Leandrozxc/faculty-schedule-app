@@ -22,5 +22,6 @@ __pycache__/
 # AI Agent skills & local design-system artifacts
 .agents/
 .gemini/
+.codex/
 design-system/
 

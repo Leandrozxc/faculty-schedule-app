@@ -211,9 +211,13 @@ window.toggleTheme = function(forceMode) {
   updateThemeButtonUI(nextDark);
 };
 
-function initIcons() {
-  if (window.lucide) {
-    window.lucide.createIcons();
+function initIcons(rootElement) {
+  if (window.lucide && window.lucide.createIcons) {
+    if (rootElement && rootElement.nodeType === 1) {
+      window.lucide.createIcons({ root: rootElement });
+    } else {
+      window.lucide.createIcons();
+    }
   }
 }
 
@@ -337,7 +341,7 @@ function setupEventListeners() {
     });
   });
 
-  // Upload & Reset confirmation modal toggles
+  // Accessible Upload & Reset confirmation modal management
   const uploadBtn = document.getElementById('open-upload-btn');
   const uploadModal = document.getElementById('upload-modal');
   const closeUploadBtn = document.getElementById('close-upload-btn');
@@ -346,38 +350,93 @@ function setupEventListeners() {
   const cancelResetBtn = document.getElementById('cancel-reset-btn');
   const confirmResetBtn = document.getElementById('confirm-reset-btn');
 
+  let lastFocusedElement = null;
+
+  function openAccessibleModal(modalEl) {
+    if (!modalEl) return;
+    lastFocusedElement = document.activeElement;
+    modalEl.classList.remove('hidden');
+    const focusable = modalEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length > 0) {
+      setTimeout(() => focusable[0].focus(), 30);
+    }
+  }
+
+  function closeAccessibleModal(modalEl) {
+    if (!modalEl || modalEl.classList.contains('hidden')) return;
+    modalEl.classList.add('hidden');
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+      lastFocusedElement.focus();
+    }
+  }
+
+  function trapModalFocus(e, modalEl) {
+    if (e.key !== 'Tab' || !modalEl || modalEl.classList.contains('hidden')) return;
+    const focusable = Array.from(modalEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter(el => !el.disabled && el.offsetParent !== null);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
   if (uploadBtn && uploadModal) {
-    uploadBtn.addEventListener('click', () => uploadModal.classList.remove('hidden'));
+    uploadBtn.addEventListener('click', () => {
+      ensureSheetJSLoaded().catch(console.error);
+      openAccessibleModal(uploadModal);
+    });
   }
   if (closeUploadBtn && uploadModal) {
-    closeUploadBtn.addEventListener('click', () => uploadModal.classList.add('hidden'));
+    closeUploadBtn.addEventListener('click', () => closeAccessibleModal(uploadModal));
   }
+  if (uploadModal) {
+    uploadModal.addEventListener('click', (e) => {
+      if (e.target === uploadModal) closeAccessibleModal(uploadModal);
+    });
+    uploadModal.addEventListener('keydown', (e) => trapModalFocus(e, uploadModal));
+  }
+
   if (resetSampleBtn) {
     resetSampleBtn.addEventListener('click', () => {
       if (resetConfirmModal) {
-        resetConfirmModal.classList.remove('hidden');
+        openAccessibleModal(resetConfirmModal);
       } else {
         performResetToSampleData();
       }
     });
   }
   if (cancelResetBtn && resetConfirmModal) {
-    cancelResetBtn.addEventListener('click', () => resetConfirmModal.classList.add('hidden'));
+    cancelResetBtn.addEventListener('click', () => closeAccessibleModal(resetConfirmModal));
   }
   if (confirmResetBtn && resetConfirmModal) {
     confirmResetBtn.addEventListener('click', () => {
-      resetConfirmModal.classList.add('hidden');
+      closeAccessibleModal(resetConfirmModal);
       performResetToSampleData();
     });
+  }
+  if (resetConfirmModal) {
+    resetConfirmModal.addEventListener('click', (e) => {
+      if (e.target === resetConfirmModal) closeAccessibleModal(resetConfirmModal);
+    });
+    resetConfirmModal.addEventListener('keydown', (e) => trapModalFocus(e, resetConfirmModal));
   }
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       if (resetConfirmModal && !resetConfirmModal.classList.contains('hidden')) {
-        resetConfirmModal.classList.add('hidden');
+        closeAccessibleModal(resetConfirmModal);
       }
       if (uploadModal && !uploadModal.classList.contains('hidden')) {
-        uploadModal.classList.add('hidden');
+        closeAccessibleModal(uploadModal);
       }
     }
   });
@@ -1164,7 +1223,7 @@ function renderRoomOccupancy() {
     if (roomConflicts.length > 0) {
       conflictContainer.classList.remove('hidden');
       conflictContainer.innerHTML = `
-        <div class="p-3.5 sm:p-4 rounded-lg bg-red-50/90 border border-red-200 border-l-4 border-l-red-600 text-red-950">
+        <div class="p-3.5 sm:p-4 rounded-lg bg-red-50/90 border border-red-300 text-red-950 shadow-2xs">
           <div class="text-xs sm:text-sm font-semibold flex items-center gap-2 text-red-900">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600 shrink-0" aria-hidden="true"></i>
             <span>Room Double-Booking Detected in ${currentRoom}</span>
@@ -1237,7 +1296,7 @@ function renderRoomOccupancy() {
                 return matched.map(s => {
                   const color = getInstructorColor(s.instructor);
                   return `
-                    <div role="button" tabindex="0" onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')" class="px-3.5 py-2.5 bg-white hover:bg-blue-50/40 flex flex-col gap-1 cursor-pointer" style="border-left: 3px solid ${color.ring}">
+                    <div role="button" tabindex="0" onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')" class="px-3.5 py-2.5 bg-white hover:bg-blue-50/40 border border-slate-200/80 rounded-md flex flex-col gap-1 cursor-pointer">
                       <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
                           <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-100 text-slate-700">${periodDef.code}</span>
@@ -1299,7 +1358,6 @@ function renderRoomOccupancy() {
           <td class="p-1.5 border-r border-slate-200/80 last:border-r-0 align-top">
             <div role="button" tabindex="0"
                  class="min-h-[56px] px-2.5 py-2 rounded-md border border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30 text-xs flex flex-col justify-between cursor-pointer transition-colors shadow-2xs"
-                 style="border-left: 3px solid ${color.ring}"
                  onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')"
                  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();viewInstructor('${escapeHtmlAttr(s.instructor)}');}"
                  title="${escapeHtmlAttr(`${s.subject} (Sec ${s.section}) • ${periodDef.shortLabel} • ${s.instructor}`)}">
@@ -1375,11 +1433,11 @@ function renderMasterTimeStrip(baseSessions) {
       <button type="button"
               onclick="selectMasterTimePeriod('${p.index}')"
               aria-pressed="${isSelected ? 'true' : 'false'}"
-              class="h-7 px-2.5 rounded-md text-xs border inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${stateClasses}"
+              class="h-8 px-3 rounded-md text-xs border inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${stateClasses}"
               title="Filter Master Schedule to ${p.code}: ${p.label} (${count} sessions)">
         <span class="font-mono font-semibold ${isSelected ? 'text-blue-100' : 'text-slate-800'}">${p.code}</span>
         <span class="font-mono text-[11px] tabular-nums">${p.shortLabel}</span>
-        <span class="px-1.5 py-0.2 rounded text-[10px] font-mono tabular-nums ${isSelected ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-600'}">${count}</span>
+        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums ${isSelected ? 'bg-blue-900 text-blue-100 font-semibold' : 'bg-slate-100 text-slate-700 font-medium'}">${count}</span>
       </button>
     `;
   }).join('');
@@ -1391,13 +1449,13 @@ function renderMasterTimeStrip(baseSessions) {
       <button type="button"
               onclick="selectMasterTimePeriod('ALL')"
               aria-pressed="${allSelected ? 'true' : 'false'}"
-              class="h-7 px-2.5 rounded-md text-xs border inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+              class="h-8 px-3 rounded-md text-xs border inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
                 allSelected
                   ? 'bg-blue-700 text-white border-blue-700 font-semibold'
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 font-medium'
               }">
         <span>All 9 Periods</span>
-        <span class="px-1.5 rounded text-[10px] font-mono ${allSelected ? 'bg-blue-800 text-blue-100' : 'bg-slate-100 text-slate-600'}">${totalCount}</span>
+        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono ${allSelected ? 'bg-blue-900 text-blue-100 font-semibold' : 'bg-slate-100 text-slate-700 font-medium'}">${totalCount}</span>
       </button>
       ${pillsHtml}
     </div>
@@ -1626,8 +1684,7 @@ function renderMasterSchedule() {
                     return `
                       <div role="button" tabindex="0"
                            onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')"
-                           class="px-3.5 py-2.5 ${isDuty ? 'bg-slate-50/70' : 'bg-white'} active:bg-blue-50 cursor-pointer"
-                           style="border-left: 3px solid ${leftBarColor};">
+                           class="px-3.5 py-2.5 ${isDuty ? 'bg-slate-50/70 border border-slate-200' : 'bg-white border border-slate-200/80'} rounded-md active:bg-blue-50 cursor-pointer">
                         <div class="flex items-center justify-between gap-2">
                           <div class="flex items-center gap-2 min-w-0">
                             <span class="text-xs font-semibold text-slate-900 truncate">${displaySubject}</span>
@@ -1715,8 +1772,7 @@ function renderMasterSchedule() {
                                title="${escapeHtmlAttr(fullTooltip)}"
                                onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')"
                                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();viewInstructor('${escapeHtmlAttr(s.instructor)}');}"
-                               class="schedule-entry rounded-md border ${isDuty ? 'border-slate-200 bg-slate-50/80 hover:bg-slate-100/80' : 'border-slate-200/90 bg-white hover:border-blue-300 hover:bg-blue-50/30'} px-2.5 py-2 cursor-pointer select-none transition-colors shadow-2xs"
-                               style="border-left: 3px solid ${leftBarColor};">
+                               class="schedule-entry rounded-md border ${isDuty ? 'border-slate-200 bg-slate-50/80 hover:bg-slate-100/80' : 'border-slate-200/90 bg-white hover:border-blue-300 hover:bg-blue-50/30'} px-2.5 py-2 cursor-pointer select-none transition-colors shadow-2xs">
                             <!-- Tier 1: Course Code (Primary) + Room Badge -->
                             <div class="flex items-center justify-between gap-1.5 min-w-0">
                               <span class="text-[12.5px] font-semibold ${isDuty ? 'text-slate-600' : 'text-slate-900'} tracking-tight truncate">${displaySubject}</span>
@@ -1905,7 +1961,7 @@ function renderInstructorSchedule() {
 
   if (profileContainer) {
     profileContainer.innerHTML = `
-      <div class="bg-white p-4 sm:px-5 sm:py-4 rounded-lg border border-slate-200 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0 max-w-full overflow-hidden" style="border-left: 4px solid ${instColor.ring}">
+      <div class="bg-white p-4 sm:px-5 sm:py-4 rounded-lg border border-slate-200 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0 max-w-full overflow-hidden">
         <!-- Left: Primary Faculty Identity, Qualification, Courses & Assigned Rooms -->
         <div class="min-w-0 flex-1">
           <div class="flex items-start gap-3.5 min-w-0">
@@ -2042,7 +2098,7 @@ function renderInstructorSchedule() {
                   const displayRoom = s.room === 'OFFICE / DEPT' ? 'Dept' : s.room;
                   const displaySection = s.isDuty ? 'Office Duty' : (s.section && s.section !== '-' ? `Sec ${s.section}` : 'Lec / Lab');
                   return `
-                    <div data-active-now="${isActiveNow ? 'true' : 'false'}" data-schedule-type="${s.isDuty ? 'duty' : 'class'}" class="px-3.5 py-2.5 ${activeCardClass} flex flex-col gap-1" style="border-left: ${isActiveNow ? '4px' : '3px'} solid ${leftBar}">
+                    <div data-active-now="${isActiveNow ? 'true' : 'false'}" data-schedule-type="${s.isDuty ? 'duty' : 'class'}" class="px-3.5 py-2.5 ${activeCardClass} rounded-md border border-slate-200 flex flex-col gap-1">
                       ${isActiveNow ? `
                         <div class="flex items-center justify-between gap-2 pb-1 mb-0.5 border-b ${s.isDuty ? 'border-amber-200/80' : 'border-emerald-200/80'}">
                           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ${
@@ -2182,8 +2238,7 @@ function renderInstructorSchedule() {
                   <div data-active-now="${isActiveNow ? 'true' : 'false'}"
                        data-schedule-type="${s.isDuty ? 'duty' : 'class'}"
                        data-Overlap="${isOverlapSlot ? 'true' : 'false'}"
-                       class="min-h-[58px] px-2.5 py-2 rounded-md flex flex-col justify-between border shadow-2xs ${cardClasses}"
-                       style="border-left: ${isActiveNow ? '4px' : '3px'} solid ${leftBar}">
+                       class="min-h-[58px] px-2.5 py-2 rounded-md flex flex-col justify-between border shadow-2xs ${cardClasses}">
                     ${isActiveNow ? `
                       <div class="flex items-center justify-between gap-1 pb-1 mb-1 border-b ${
                         isOverlapSlot ? 'border-red-200/80' : s.isDuty ? 'border-amber-200/80' : 'border-emerald-200/80'
@@ -2258,10 +2313,11 @@ function renderRosterView() {
         const classCount = inst.sessions.filter(s => !s.isDuty).length;
         const isFT = inst.status && (inst.status.includes('FT') || inst.status.toUpperCase().includes('FULL-TIME'));
         return `
-          <div class="bg-white rounded-lg border border-slate-200 p-3.5 flex flex-col gap-2 shadow-2xs" style="border-left: 3px solid ${color.ring}">
+          <div class="bg-white rounded-lg border border-slate-200 p-3.5 flex flex-col gap-2 shadow-2xs">
             <div class="flex items-start justify-between gap-2">
               <div class="flex items-center gap-2 min-w-0">
-                <span class="text-xs font-mono text-slate-400">${String(idx + 1).padStart(2, '0')}</span>
+                <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${color.ring}"></span>
+                <span class="text-xs font-mono text-slate-500">${String(idx + 1).padStart(2, '0')}</span>
                 <span class="font-semibold text-sm text-slate-900 truncate">${inst.name}</span>
               </div>
               <span class="px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${
@@ -2465,6 +2521,24 @@ function setupFileUpload() {
     }
   });
 
+  function ensureSheetJSLoaded() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[src*="xlsx"]');
+      if (existing) {
+        if (window.XLSX) return resolve(window.XLSX);
+        existing.addEventListener('load', () => resolve(window.XLSX));
+        existing.addEventListener('error', reject);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+      script.onload = () => resolve(window.XLSX);
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
   function handleFile(file) {
     if (!file.name.match(/\.(xlsx|xls|csv)$/i)) {
       showUploadStatus('Please upload a valid Excel (.xlsx, .xls) or CSV file.', 'error');
@@ -2473,44 +2547,49 @@ function setupFileUpload() {
 
     showUploadStatus(`Reading and parsing "${file.name}"...`, 'info');
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-
-        const parsed = window.parseScheduleWorkbook(workbook);
-
-        if (!parsed.instructors || parsed.instructors.length === 0) {
-          showUploadStatus('No individual schedule sheets found in this file. Please make sure the sheets have "INDIVIDUAL FACULTY TEACHING LOAD ASSIGNMENT" or "CLASS SCHEDULE".', 'error');
-          return;
-        }
-
-        state.data = parsed;
-        annotateSessionPeriods(state.data);
+    ensureSheetJSLoaded().then(() => {
+      const reader = new FileReader();
+      reader.onload = function(e) {
         try {
-          localStorage.setItem('cea_schedule_data', JSON.stringify(parsed));
-        } catch (storageErr) {
-          console.warn('LocalStorage quota exceeded, data will remain in memory for this session.', storageErr);
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+
+          const parsed = window.parseScheduleWorkbook(workbook);
+
+          if (!parsed.instructors || parsed.instructors.length === 0) {
+            showUploadStatus('No individual schedule sheets found in this file. Please make sure the sheets have "INDIVIDUAL FACULTY TEACHING LOAD ASSIGNMENT" or "CLASS SCHEDULE".', 'error');
+            return;
+          }
+
+          state.data = parsed;
+          annotateSessionPeriods(state.data);
+          try {
+            localStorage.setItem('cea_schedule_data', JSON.stringify(parsed));
+          } catch (storageErr) {
+            console.warn('LocalStorage quota exceeded, data will remain in memory for this session.', storageErr);
+          }
+
+          setupDefaults();
+          renderAll();
+
+          showUploadStatus(`Successfully parsed ${parsed.instructors.length} instructors, ${parsed.sessions.length} sessions across ${parsed.rooms.length} rooms!`, 'success');
+
+          setTimeout(() => {
+            const uploadModal = document.getElementById('upload-modal');
+            if (uploadModal) uploadModal.classList.add('hidden');
+            showNotification(`Loaded new schedule from ${file.name}`, 'success');
+          }, 1200);
+
+        } catch (err) {
+          console.error('Error parsing workbook:', err);
+          showUploadStatus(`Failed to parse file: ${err.message}`, 'error');
         }
-
-        setupDefaults();
-        renderAll();
-
-        showUploadStatus(`Successfully parsed ${parsed.instructors.length} instructors, ${parsed.sessions.length} sessions across ${parsed.rooms.length} rooms!`, 'success');
-
-        setTimeout(() => {
-          const uploadModal = document.getElementById('upload-modal');
-          if (uploadModal) uploadModal.classList.add('hidden');
-          showNotification(`Loaded new schedule from ${file.name}`, 'success');
-        }, 1200);
-
-      } catch (err) {
-        console.error('Error parsing workbook:', err);
-        showUploadStatus(`Failed to parse file: ${err.message}`, 'error');
-      }
-    };
-    reader.readAsArrayBuffer(file);
+      };
+      reader.readAsArrayBuffer(file);
+    }).catch(err => {
+      console.error('Failed to load Excel parsing engine:', err);
+      showUploadStatus('Failed to load Excel parser. Please check your network connection.', 'error');
+    });
   }
 
   function showUploadStatus(msg, type) {
@@ -2577,39 +2656,40 @@ function exportScheduleToCsv() {
    ========================================================================= */
 const MANILA_TIMEZONE = 'Asia/Manila';
 
+// Memoized formatters to avoid per-second re-instantiation overhead
+const manilaTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: MANILA_TIMEZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true
+});
+
+const manilaDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: MANILA_TIMEZONE,
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric'
+});
+
+const manilaPartsFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: MANILA_TIMEZONE,
+  weekday: 'long',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23'
+});
+
 function getManilaTimeSnapshot() {
   const now = window.__TEST_CLOCK_DATE ? new Date(window.__TEST_CLOCK_DATE) : new Date();
 
-  const timeFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: MANILA_TIMEZONE,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  });
-
-  const dateFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: MANILA_TIMEZONE,
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric'
-  });
-
-  const partsFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: MANILA_TIMEZONE,
-    weekday: 'long',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23'
-  });
-
   const parts = {};
-  partsFormatter.formatToParts(now).forEach(p => {
+  manilaPartsFormatter.formatToParts(now).forEach(p => {
     if (p.type !== 'literal') parts[p.type] = p.value;
   });
 
@@ -2630,8 +2710,8 @@ function getManilaTimeSnapshot() {
 
   return {
     now,
-    timeDisplay: timeFormatter.format(now),
-    dateDisplay: dateFormatter.format(now),
+    timeDisplay: manilaTimeFormatter.format(now),
+    dateDisplay: manilaDateFormatter.format(now),
     dayOfWeek,
     dayTitle,
     isAcademicDay,
@@ -3098,8 +3178,7 @@ function renderLiveAvailabilityPanel() {
             const displaySection = s.isDuty ? 'Office Duty' : (s.section && s.section !== '-' ? `Sec ${s.section}` : 'Lec / Lab');
 
             return `
-              <div class="rounded-lg border border-slate-200 bg-white p-3.5 flex flex-col justify-between gap-2.5 hover:border-slate-300 transition-colors shadow-2xs"
-                   style="border-left: 3px solid ${leftBarColor}">
+              <div class="rounded-lg border border-slate-200 bg-white p-3.5 flex flex-col justify-between gap-2.5 hover:border-slate-300 transition-colors shadow-2xs">
                 <div>
                   <!-- Top Row: Class Name + Section & Live Schedule Status Badge -->
                   <div class="flex items-start justify-between gap-2">
