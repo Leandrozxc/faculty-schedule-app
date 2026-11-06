@@ -1018,7 +1018,7 @@ function formatPeriodAxisCell(periodDef, isCurrentPeriod = false) {
           <span class="text-[11px] font-medium ${isCurrentPeriod ? 'text-emerald-700 font-semibold' : 'text-slate-500'}">${shiftLabel}</span>
         </div>
         ${isCurrentPeriod ? `
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0" title="Current active academic period">
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0" title="Current active academic period">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
             <span>NOW</span>
           </span>
@@ -1286,7 +1286,7 @@ function renderRoomOccupancy() {
                   return `
                     <div class="px-3.5 py-2 flex items-center justify-between text-xs bg-slate-50/40">
                       <div class="flex items-center gap-2 font-mono">
-                        <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600">${periodDef.code}</span>
+                        <span class="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">${periodDef.code}</span>
                         <span class="text-[11px] text-slate-500 tabular-nums">${periodDef.shortLabel}</span>
                       </div>
                       <span class="text-[11px] text-slate-400">No class scheduled</span>
@@ -1299,7 +1299,7 @@ function renderRoomOccupancy() {
                     <div role="button" tabindex="0" onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')" class="px-3.5 py-2.5 bg-white hover:bg-blue-50/40 border border-slate-200/80 rounded-md flex flex-col gap-1 cursor-pointer">
                       <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
-                          <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-100 text-slate-700">${periodDef.code}</span>
+                          <span class="px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-slate-100 text-slate-700">${periodDef.code}</span>
                           <span class="text-xs font-mono font-medium text-slate-600 tabular-nums">${periodDef.shortLabel}</span>
                         </div>
                         <span class="text-[11px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">Sec ${s.section}</span>
@@ -1363,14 +1363,14 @@ function renderRoomOccupancy() {
                  title="${escapeHtmlAttr(`${s.subject} (Sec ${s.section}) • ${periodDef.shortLabel} • ${s.instructor}`)}">
               <div class="flex items-center justify-between gap-1.5 min-w-0">
                 <span class="font-semibold text-[12.5px] text-slate-900 truncate">${s.subject}</span>
-                <span class="text-[10.5px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 shrink-0">Sec ${s.section}</span>
+                <span class="text-[11px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 shrink-0">Sec ${s.section}</span>
               </div>
               <div class="flex items-center justify-between gap-1.5 min-w-0 mt-1.5">
                 <span class="text-[11px] font-medium text-slate-700 truncate flex items-center gap-1.5">
                   <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${color.ring}"></span>
                   <span class="truncate">${s.instructor.split(',')[0]}</span>
                 </span>
-                <span class="text-[10px] font-mono text-slate-400 tabular-nums shrink-0">${periodDef.code}</span>
+                <span class="text-[11px] font-mono text-slate-500 dark:text-slate-300 tabular-nums shrink-0">${periodDef.code}</span>
               </div>
             </div>
           </td>
@@ -1379,14 +1379,14 @@ function renderRoomOccupancy() {
         html += `
           <td class="p-1.5 border-r border-slate-200/80 last:border-r-0 align-top">
             <div class="min-h-[56px] px-2.5 py-1.5 rounded-md bg-red-50 border border-red-300 border-l-[3px] border-l-red-600 text-red-950 flex flex-col justify-between">
-              <div class="font-semibold text-[10.5px] text-red-700 flex items-center justify-between gap-1">
+              <div class="font-semibold text-[11px] text-red-700 flex items-center justify-between gap-1">
                 <span class="inline-flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3 h-3 text-red-600 shrink-0" aria-hidden="true"></i>Conflict (${matched.length})</span>
-                <span class="font-mono text-[10px]">${periodDef.code}</span>
+                <span class="font-mono text-[11px]">${periodDef.code}</span>
               </div>
               <div class="text-[11px] font-semibold text-red-900 truncate mt-0.5" title="${escapeHtmlAttr(matched.map(m => `${m.subject} (${m.section})`).join(' vs '))}">
                 ${matched.map(m => `${m.subject} (${m.section})`).join(' / ')}
               </div>
-              <div class="text-[10.5px] text-red-800 truncate">
+              <div class="text-[11px] text-red-800 truncate">
                 ${matched.map(m => m.instructor.split(',')[0]).join(' & ')}
               </div>
             </div>
@@ -1437,7 +1437,7 @@ function renderMasterTimeStrip(baseSessions) {
               title="Filter Master Schedule to ${p.code}: ${p.label} (${count} sessions)">
         <span class="font-mono font-semibold ${isSelected ? 'text-blue-100' : 'text-slate-800'}">${p.code}</span>
         <span class="font-mono text-[11px] tabular-nums">${p.shortLabel}</span>
-        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums ${isSelected ? 'bg-blue-900 text-blue-100 font-semibold' : 'bg-slate-100 text-slate-700 font-medium'}">${count}</span>
+        <span class="px-1.5 py-0.5 rounded text-[11px] font-mono tabular-nums ${isSelected ? 'bg-blue-900 text-blue-100 font-semibold' : 'bg-slate-100 text-slate-700 font-medium'}">${count}</span>
       </button>
     `;
   }).join('');
@@ -1455,7 +1455,7 @@ function renderMasterTimeStrip(baseSessions) {
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 font-medium'
               }">
         <span>All 9 Periods</span>
-        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono ${allSelected ? 'bg-blue-900 text-blue-100 font-semibold' : 'bg-slate-100 text-slate-700 font-medium'}">${totalCount}</span>
+        <span class="px-1.5 py-0.5 rounded text-[11px] font-mono ${allSelected ? 'bg-blue-900 text-blue-100 font-semibold' : 'bg-slate-100 text-slate-700 font-medium'}">${totalCount}</span>
       </button>
       ${pillsHtml}
     </div>
@@ -1557,7 +1557,7 @@ function renderMasterSchedule() {
                   <td class="py-2.5 px-4 font-semibold text-slate-800 whitespace-nowrap">${DAY_TITLE_LABELS[s.day] || s.day}</td>
                   <td class="py-2.5 px-4 whitespace-nowrap">
                     <div class="inline-flex items-center gap-2 font-mono">
-                      <span class="px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-slate-100 text-slate-800">${pDef.code}</span>
+                      <span class="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800">${pDef.code}</span>
                       <span class="text-xs font-medium text-slate-700 tabular-nums">${pDef.shortLabel}</span>
                     </div>
                   </td>
@@ -1693,7 +1693,7 @@ function renderMasterSchedule() {
                           <span class="text-[11px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 shrink-0">${displayRoom}</span>
                         </div>
                         <div class="flex items-center justify-between gap-2 mt-1">
-                          <span class="text-[10.5px] font-mono text-slate-400 tabular-nums">${DAY_SHORT_LABELS[d]} • ${periodDef.shortLabel}</span>
+                          <span class="text-[11px] font-mono text-slate-500 dark:text-slate-300 tabular-nums">${DAY_SHORT_LABELS[d]} • ${periodDef.shortLabel}</span>
                           <span class="text-xs font-medium text-slate-700 flex items-center gap-1.5">
                             <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${dotColor}"></span>
                             <span>${instructorSurname}</span>
@@ -1735,7 +1735,7 @@ function renderMasterSchedule() {
               <!-- Sticky Left Time Stamp Anchor -->
               <td class="p-3.5 border-r border-slate-200 sticky left-0 bg-slate-50/50 z-10 align-top sticky-time-col">
                 <div class="sticky top-28">
-                  <div class="inline-block px-1.5 py-0.5 rounded text-[10.5px] font-mono font-semibold bg-slate-200/80 text-slate-800 mb-1">${periodDef.code}</div>
+                  <div class="inline-block px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-slate-200/80 text-slate-800 mb-1">${periodDef.code}</div>
                   <div class="text-xs font-mono font-semibold text-slate-900 tabular-nums leading-tight">${periodDef.start}</div>
                   <div class="text-[11px] font-mono text-slate-500 tabular-nums leading-tight mt-0.5">to ${periodDef.end}</div>
                 </div>
@@ -1776,7 +1776,7 @@ function renderMasterSchedule() {
                             <!-- Tier 1: Course Code (Primary) + Room Badge -->
                             <div class="flex items-center justify-between gap-1.5 min-w-0">
                               <span class="text-[12.5px] font-semibold ${isDuty ? 'text-slate-600' : 'text-slate-900'} tracking-tight truncate">${displaySubject}</span>
-                              <span class="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded ${isDuty ? 'bg-slate-200/70 text-slate-600' : 'bg-slate-100 text-slate-700'} shrink-0 whitespace-nowrap leading-none">${displayRoom}</span>
+                              <span class="text-[11px] font-mono font-medium px-1.5 py-0.5 rounded ${isDuty ? 'bg-slate-200/70 text-slate-600' : 'bg-slate-100 text-slate-700'} shrink-0 whitespace-nowrap leading-none">${displayRoom}</span>
                             </div>
 
                             <!-- Tier 2: Section + Instructor Surname -->
@@ -1865,9 +1865,9 @@ function renderInstructorSchedule() {
       const s = liveStatus.activeSessions[0];
       const secText = s.section && s.section !== '-' ? `Sec ${s.section}` : 'Lec / Lab';
       liveProfileBannerHtml = `
-        <div id="faculty-live-status-banner" data-live-status="ACTIVE_CLASS" class="mt-3 px-3 py-2 rounded-md bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div id="faculty-live-status-banner" data-live-status="ACTIVE_CLASS" class="mt-2 px-3 py-1.5 rounded-md bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div class="flex flex-wrap items-center gap-2 min-w-0">
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10.5px] font-mono font-semibold bg-emerald-600 text-white shrink-0">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-600 text-white shrink-0">
               <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
               <span>HAPPENING NOW</span>
             </span>
@@ -1886,13 +1886,13 @@ function renderInstructorSchedule() {
       const dutyTitle = s.dutyName || s.subject.replace(/\s*\(Office Duty\)/i, '');
       const dutyRoom = s.room === 'OFFICE / DEPT' ? 'Department / Office' : s.room;
       liveProfileBannerHtml = `
-        <div id="faculty-live-status-banner" data-live-status="ACTIVE_DUTY" class="mt-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div id="faculty-live-status-banner" data-live-status="ACTIVE_DUTY" class="mt-2 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div class="flex flex-wrap items-center gap-2 min-w-0">
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10.5px] font-mono font-semibold bg-amber-600 text-white shrink-0">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-amber-600 text-white shrink-0">
               <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
               <span>HAPPENING NOW</span>
             </span>
-            <span class="px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-amber-100 text-amber-900 border border-amber-300">Office Duty</span>
+            <span class="px-1.5 py-0.5 rounded text-[11px] font-medium bg-amber-100 text-amber-900 border border-amber-300">Office Duty</span>
             <span class="font-semibold text-slate-900">${dutyTitle}</span>
             <span class="text-slate-400">•</span>
             <span class="font-mono font-medium text-slate-700">${dutyRoom}</span>
@@ -1908,9 +1908,9 @@ function renderInstructorSchedule() {
         return label;
       }).join(' & ');
       liveProfileBannerHtml = `
-        <div id="faculty-live-status-banner" data-live-status="ACTIVE_MULTIPLE" class="mt-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div id="faculty-live-status-banner" data-live-status="ACTIVE_MULTIPLE" class="mt-2 px-3 py-1.5 rounded-md bg-red-50 border border-red-200 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div class="flex flex-wrap items-center gap-2 min-w-0">
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10.5px] font-mono font-semibold bg-red-600 text-white shrink-0">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-red-600 text-white shrink-0">
               <i data-lucide="alert-triangle" class="w-3 h-3" aria-hidden="true"></i>
               <span>HAPPENING NOW • ${liveStatus.activeSessions.length} OVERLAPPING</span>
             </span>
@@ -1926,9 +1926,9 @@ function renderInstructorSchedule() {
         ? `Next today: ${liveStatus.nextSession.isDuty ? (liveStatus.nextSession.dutyName || liveStatus.nextSession.subject) : liveStatus.nextSession.subject} at ${liveStatus.nextPeriodDef.start} (${liveStatus.nextPeriodDef.code})`
         : `No remaining scheduled sessions for ${snapshot.dayTitle}`;
       liveProfileBannerHtml = `
-        <div id="faculty-live-status-banner" data-live-status="NO_CURRENT_ACTIVITY" class="mt-3 px-3 py-2 rounded-md bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div id="faculty-live-status-banner" data-live-status="NO_CURRENT_ACTIVITY" class="mt-2 px-3 py-1.5 rounded-md bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div class="flex flex-wrap items-center gap-2 min-w-0">
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10.5px] font-mono font-medium bg-slate-200/80 text-slate-700 shrink-0">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-slate-200/80 text-slate-700 shrink-0">
               <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
               <span>${p.code} NOW</span>
             </span>
@@ -1949,7 +1949,7 @@ function renderInstructorSchedule() {
         ? `Before academic hours (starts at ${snapshot.nextPeriod.start})`
         : 'Outside scheduled academic hours (concluded at 9:00 PM)';
     liveProfileBannerHtml = `
-      <div id="faculty-live-status-banner" data-live-status="OUTSIDE_HOURS" class="mt-3 px-3 py-1.5 rounded-md bg-slate-50/80 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+      <div id="faculty-live-status-banner" data-live-status="OUTSIDE_HOURS" class="mt-2 px-3 py-1 rounded-md bg-slate-50/80 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
         <div class="flex items-center gap-2">
           <span class="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span>
           <span>No active schedule right now — ${outsideReason}</span>
@@ -1961,16 +1961,16 @@ function renderInstructorSchedule() {
 
   if (profileContainer) {
     profileContainer.innerHTML = `
-      <div class="bg-white p-4 sm:px-5 sm:py-4 rounded-lg border border-slate-200 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0 max-w-full overflow-hidden">
+      <div class="bg-white p-3 sm:px-4 sm:py-3 rounded-lg border border-slate-200 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0 max-w-full overflow-hidden">
         <!-- Left: Primary Faculty Identity, Qualification, Courses & Assigned Rooms -->
         <div class="min-w-0 flex-1">
           <div class="flex items-start gap-3.5 min-w-0">
-            <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-lg font-semibold flex items-center justify-center text-base sm:text-lg text-white shrink-0 shadow-2xs" style="background-color: ${instColor.ring}">
+            <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-semibold flex items-center justify-center text-sm sm:text-base text-white shrink-0 shadow-2xs" style="background-color: ${instColor.ring}">
               ${faculty.name.split(',')[0].charAt(0)}
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-base sm:text-xl font-bold text-slate-900 tracking-tight leading-snug break-words">${faculty.name}</h2>
+                <h2 class="text-sm sm:text-lg font-bold text-slate-900 tracking-tight leading-snug break-words">${faculty.name}</h2>
                 <span class="px-2 py-0.5 rounded-full text-xs font-medium ${
                   isFT
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -1989,7 +1989,7 @@ function renderInstructorSchedule() {
               </div>
 
               ${assignedRooms.length > 0 ? `
-                <div class="flex items-center gap-1.5 flex-wrap mt-2.5">
+                <div class="flex items-center gap-1.5 flex-wrap mt-1.5">
                   <span class="text-xs font-medium text-slate-500 mr-0.5">Assigned Rooms:</span>
                   ${assignedRooms.map(room => `
                     <button type="button" onclick="viewRoomFromSchedule('${escapeHtmlAttr(room)}')" title="Inspect room ${escapeHtmlAttr(room)} occupancy" class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200/90 hover:border-blue-200 transition-colors cursor-pointer">
@@ -2005,7 +2005,7 @@ function renderInstructorSchedule() {
         </div>
 
         <!-- Right: Grouped Weekly Workload & Quick Actions -->
-        <div class="flex flex-wrap items-center justify-between lg:justify-end gap-4 sm:gap-6 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 lg:ml-auto shrink-0">
+        <div class="flex flex-wrap items-center justify-between lg:justify-end gap-3 sm:gap-4 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 lg:ml-auto shrink-0">
           <div class="flex items-center gap-5 sm:gap-6 lg:border-r lg:border-slate-200 lg:pr-6">
             <div>
               <div class="text-xs font-medium text-slate-500">Weekly Classes</div>
@@ -2075,7 +2075,7 @@ function renderInstructorSchedule() {
             <div class="${isToday ? 'live-today-header' : 'bg-slate-100/90'} border-b border-slate-200 text-slate-900 px-3.5 py-2 flex items-center justify-between text-xs">
               <div class="flex items-center gap-2">
                 <span class="font-semibold">${DAY_TITLE_LABELS[d]}</span>
-                ${isToday ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-700 text-white">TODAY</span>' : ''}
+                ${isToday ? '<span class="px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-blue-700 text-white">TODAY</span>' : ''}
               </div>
               <span class="px-2 py-0.5 rounded text-[11px] bg-white ${dayEntries.length > 0 ? 'text-slate-800 font-medium' : 'text-slate-400'} border border-slate-200">${dayEntries.length} ${dayEntries.length === 1 ? 'session' : 'sessions'}</span>
             </div>
@@ -2101,7 +2101,7 @@ function renderInstructorSchedule() {
                     <div data-active-now="${isActiveNow ? 'true' : 'false'}" data-schedule-type="${s.isDuty ? 'duty' : 'class'}" class="px-3.5 py-2.5 ${activeCardClass} rounded-md border border-slate-200 flex flex-col gap-1">
                       ${isActiveNow ? `
                         <div class="flex items-center justify-between gap-2 pb-1 mb-0.5 border-b ${s.isDuty ? 'border-amber-200/80' : 'border-emerald-200/80'}">
-                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ${
+                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold ${
                             isOverlap
                               ? 'bg-red-600 text-white'
                               : s.isDuty
@@ -2111,12 +2111,12 @@ function renderInstructorSchedule() {
                             <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
                             <span>HAPPENING NOW</span>
                           </span>
-                          <span class="font-mono text-[10.5px] font-semibold ${s.isDuty ? 'text-amber-800' : 'text-emerald-800'} tabular-nums">${liveStatus.remainingMin}m left</span>
+                          <span class="font-mono text-[11px] font-semibold ${s.isDuty ? 'text-amber-800' : 'text-emerald-800'} tabular-nums">${liveStatus.remainingMin}m left</span>
                         </div>
                       ` : ''}
                       <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2 font-mono">
-                          <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">${periodDef.code}</span>
+                          <span class="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700">${periodDef.code}</span>
                           <span class="text-xs font-medium text-slate-700 tabular-nums">${periodDef.shortLabel}</span>
                         </div>
                         <button type="button" onclick="viewRoomFromSchedule('${escapeHtmlAttr(s.room)}')" class="px-2 py-0.5 rounded font-mono text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
@@ -2151,7 +2151,7 @@ function renderInstructorSchedule() {
                   <div class="flex items-center justify-between gap-1.5">
                     <div class="flex items-center gap-1.5">
                       <span class="${isToday ? 'text-blue-700 font-bold' : ''}">${DAY_TITLE_LABELS[d]}</span>
-                      ${isToday ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-700 text-white leading-none">TODAY</span>' : ''}
+                      ${isToday ? '<span class="px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-blue-700 text-white leading-none">TODAY</span>' : ''}
                     </div>
                     ${dCount > 0 ? `<span class="text-[11px] font-mono font-medium px-1.5 py-0.2 rounded bg-slate-200/70 text-slate-700 tabular-nums">${dCount}</span>` : ''}
                   </div>
@@ -2181,7 +2181,7 @@ function renderInstructorSchedule() {
       // Subtle current-time progress indicator inside today's active period slot
       const currentTimeMarkerHtml = isCurrentSlot ? `
         <div class="live-time-marker mb-1.5" title="Current time (${snapshot.timeDisplay}) — ${liveStatus.progressPercent}% through ${periodDef.code}">
-          <div class="flex items-center justify-between text-[10px] font-mono text-emerald-700 mb-0.5 leading-none">
+          <div class="flex items-center justify-between text-[11px] font-mono text-emerald-700 mb-0.5 leading-none">
             <span class="inline-flex items-center gap-1 font-semibold">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               <span>${snapshot.timeDisplay.replace(/:\d{2}\s/, ' ')}</span>
@@ -2243,7 +2243,7 @@ function renderInstructorSchedule() {
                       <div class="flex items-center justify-between gap-1 pb-1 mb-1 border-b ${
                         isOverlapSlot ? 'border-red-200/80' : s.isDuty ? 'border-amber-200/80' : 'border-emerald-200/80'
                       }">
-                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-mono font-semibold leading-none ${
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold leading-none ${
                           isOverlapSlot
                             ? 'bg-red-600 text-white'
                             : s.isDuty
@@ -2254,23 +2254,23 @@ function renderInstructorSchedule() {
                           <span>HAPPENING NOW</span>
                         </span>
                         ${isOverlapSlot ? `
-                          <span class="px-1 py-0.5 rounded text-[9px] font-mono font-semibold bg-red-100 text-red-800 leading-none">OVERLAP</span>
+                          <span class="px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-red-100 text-red-800 leading-none">OVERLAP</span>
                         ` : ''}
                       </div>
                     ` : ''}
                     <div class="flex items-center justify-between gap-1.5 min-w-0">
                       <span class="font-semibold text-[13px] ${s.isDuty && !isActiveNow ? 'text-slate-600' : 'text-slate-900'} truncate" title="${escapeHtmlAttr(s.subject)}">${displaySubject}</span>
                       ${s.isDuty ? `
-                        <span class="px-1.5 py-0.5 rounded font-mono text-[10px] font-medium ${isActiveNow ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-200/70 text-slate-600'} shrink-0 leading-none">${displayRoom}</span>
+                        <span class="px-1.5 py-0.5 rounded font-mono text-[11px] font-medium ${isActiveNow ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-200/70 text-slate-600'} shrink-0 leading-none">${displayRoom}</span>
                       ` : `
-                        <button type="button" onclick="viewRoomFromSchedule('${escapeHtmlAttr(s.room)}')" title="Inspect room ${escapeHtmlAttr(s.room)}" class="px-1.5 py-0.5 rounded font-mono text-[10.5px] font-medium bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200/80 shrink-0 leading-none cursor-pointer transition-colors">
+                        <button type="button" onclick="viewRoomFromSchedule('${escapeHtmlAttr(s.room)}')" title="Inspect room ${escapeHtmlAttr(s.room)}" class="px-1.5 py-0.5 rounded font-mono text-[11px] font-medium bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200/80 shrink-0 leading-none cursor-pointer transition-colors">
                           ${displayRoom}
                         </button>
                       `}
                     </div>
                     <div class="text-[11px] flex justify-between items-center pt-1.5 mt-1 border-t ${isActiveNow ? (s.isDuty ? 'border-amber-200/60' : 'border-emerald-200/60') : 'border-slate-100'}">
                       <span class="font-medium ${s.isDuty ? (isActiveNow ? 'text-amber-900 font-semibold' : 'text-slate-500') : 'text-blue-700'} truncate">${displaySection}</span>
-                      <span class="font-mono text-[10px] ${isActiveNow ? 'text-slate-700 font-medium' : 'text-slate-400'} tabular-nums shrink-0">${periodDef.shortLabel}</span>
+                      <span class="font-mono text-[11px] ${isActiveNow ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-500 dark:text-slate-300'} tabular-nums shrink-0">${periodDef.shortLabel}</span>
                     </div>
                   </div>
                 `;
@@ -3056,7 +3056,7 @@ function renderLiveAvailabilityPanel() {
                 }">
           <span class="w-2 h-2 rounded-full ${activeFilter === 'ONGOING' ? 'bg-emerald-200' : 'bg-emerald-600'}"></span>
           <span>In Progress</span>
-          <span class="px-1.5 py-0.2 rounded text-[10.5px] font-mono tabular-nums ${activeFilter === 'ONGOING' ? 'bg-emerald-800 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.ongoing.length}</span>
+          <span class="px-1.5 py-0.2 rounded text-[11px] font-mono tabular-nums ${activeFilter === 'ONGOING' ? 'bg-emerald-800 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.ongoing.length}</span>
         </button>
 
         <button type="button"
@@ -3069,7 +3069,7 @@ function renderLiveAvailabilityPanel() {
                 }">
           <span class="w-2 h-2 rounded-full ${activeFilter === 'UPCOMING' ? 'bg-amber-200' : 'bg-amber-500'}"></span>
           <span>Not Started</span>
-          <span class="px-1.5 py-0.2 rounded text-[10.5px] font-mono tabular-nums ${activeFilter === 'UPCOMING' ? 'bg-amber-800 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.upcoming.length}</span>
+          <span class="px-1.5 py-0.2 rounded text-[11px] font-mono tabular-nums ${activeFilter === 'UPCOMING' ? 'bg-amber-800 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.upcoming.length}</span>
         </button>
 
         <button type="button"
@@ -3082,7 +3082,7 @@ function renderLiveAvailabilityPanel() {
                 }">
           <span class="w-2 h-2 rounded-full bg-slate-400"></span>
           <span>Ended Today</span>
-          <span class="px-1.5 py-0.2 rounded text-[10.5px] font-mono tabular-nums ${activeFilter === 'ENDED' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.ended.length}</span>
+          <span class="px-1.5 py-0.2 rounded text-[11px] font-mono tabular-nums ${activeFilter === 'ENDED' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.ended.length}</span>
         </button>
 
         <button type="button"
@@ -3094,7 +3094,7 @@ function renderLiveAvailabilityPanel() {
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 font-medium'
                 }">
           <span>All ${snapshot.dayTitle}</span>
-          <span class="px-1.5 py-0.2 rounded text-[10.5px] font-mono tabular-nums ${activeFilter === 'ALL_TODAY' ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.allToday.length}</span>
+          <span class="px-1.5 py-0.2 rounded text-[11px] font-mono tabular-nums ${activeFilter === 'ALL_TODAY' ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700'}">${breakdown.allToday.length}</span>
         </button>
       </div>
 
@@ -3196,7 +3196,7 @@ function renderLiveAvailabilityPanel() {
                   <!-- Middle Row: Period Time & Assigned Room -->
                   <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
                     <div class="min-w-0 font-mono">
-                      <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10.5px] font-semibold mr-1.5">${pDef.code}</span>
+                      <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-semibold mr-1.5">${pDef.code}</span>
                       <span class="text-slate-700 font-medium tabular-nums">${pDef.start} – ${pDef.end}</span>
                     </div>
                     <button type="button"

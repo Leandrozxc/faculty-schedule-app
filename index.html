@@ -60,7 +60,7 @@
       --color-success: #047857;
       --color-warning: #B45309;
       --color-conflict: #DC2626;
-      --header-offset: 108px;
+      --header-offset: 86px;
     }
 
     html.dark {
@@ -505,7 +505,7 @@
                   role="tab"
                   aria-selected="true"
                   type="button"
-                  class="nav-tab-btn h-10 sm:h-11 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-blue-700 border-b-2 border-blue-700 transition-colors flex items-center justify-center sm:justify-start gap-2 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
+                  class="nav-tab-btn h-9 sm:h-9.5 px-2 sm:px-3.5 text-xs sm:text-sm font-semibold text-blue-700 border-b-2 border-blue-700 transition-colors flex items-center justify-center sm:justify-start gap-1.5 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
             <i data-lucide="user-check" class="w-4 h-4 hidden sm:inline shrink-0" aria-hidden="true"></i>
             <span class="sm:hidden truncate">Instructors</span>
             <span class="hidden sm:inline">Instructor Timetables</span>
@@ -515,7 +515,7 @@
                   role="tab"
                   aria-selected="false"
                   type="button"
-                  class="nav-tab-btn h-10 sm:h-11 px-2 sm:px-4 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent hover:border-slate-300 transition-colors flex items-center justify-center sm:justify-start gap-2 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
+                  class="nav-tab-btn h-9 sm:h-9.5 px-2 sm:px-3.5 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent hover:border-slate-300 transition-colors flex items-center justify-center sm:justify-start gap-1.5 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
             <i data-lucide="calendar-days" class="w-4 h-4 hidden sm:inline shrink-0" aria-hidden="true"></i>
             <span class="sm:hidden truncate">Master</span>
             <span class="hidden sm:inline">Master Weekly Schedule</span>
@@ -525,7 +525,7 @@
                   role="tab"
                   aria-selected="false"
                   type="button"
-                  class="nav-tab-btn h-10 sm:h-11 px-2 sm:px-4 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent hover:border-slate-300 transition-colors flex items-center justify-center sm:justify-start gap-2 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
+                  class="nav-tab-btn h-9 sm:h-9.5 px-2 sm:px-3.5 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent hover:border-slate-300 transition-colors flex items-center justify-center sm:justify-start gap-1.5 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
             <i data-lucide="door-open" class="w-4 h-4 hidden sm:inline shrink-0" aria-hidden="true"></i>
             <span class="sm:hidden truncate">Rooms</span>
             <span class="hidden sm:inline">Room Occupancy</span>
@@ -535,7 +535,7 @@
                   role="tab"
                   aria-selected="false"
                   type="button"
-                  class="nav-tab-btn h-10 sm:h-11 px-2 sm:px-4 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent hover:border-slate-300 transition-colors flex items-center justify-center sm:justify-start gap-2 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
+                  class="nav-tab-btn h-9 sm:h-9.5 px-2 sm:px-3.5 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent hover:border-slate-300 transition-colors flex items-center justify-center sm:justify-start gap-1.5 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
             <i data-lucide="users" class="w-4 h-4 hidden sm:inline shrink-0" aria-hidden="true"></i>
             <span class="sm:hidden truncate">Faculty</span>
             <span class="hidden sm:inline">Faculty Summary</span>
@@ -552,7 +552,7 @@
   <!-- =========================================================================
        MAIN WORKSPACE
        ========================================================================= -->
-  <main class="max-w-[1520px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-5 w-full min-w-0 overflow-x-hidden flex-1 space-y-4">
+  <main class="max-w-[1520px] mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 w-full min-w-0 overflow-x-hidden flex-1 space-y-2.5 sm:space-y-3">
 
     <!-- =========================================================================
          C. INTEGRATED LIVE CLOCK & CURRENT-CLASS STATUS BAR
@@ -564,41 +564,41 @@
            aria-expanded="false"
            aria-controls="live-availability-panel"
            class="group bg-white border border-slate-200/90 hover:border-slate-300 rounded-lg shadow-2xs transition-all cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 min-w-0 max-w-full overflow-hidden">
-        <div class="px-4 sm:px-5 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
+        <div class="px-3.5 sm:px-4 py-2 sm:py-2.5 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3">
           <!-- Left: Prominent Digital Clock & Full Date -->
-          <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 min-w-0 sm:pr-5 lg:border-r lg:border-slate-200">
-            <div class="flex items-center gap-2.5">
+          <div class="flex flex-wrap items-baseline gap-x-3.5 gap-y-1 min-w-0 sm:pr-4 lg:border-r lg:border-slate-200">
+            <div class="flex items-center gap-2">
               <span id="live-clock-pulse" class="w-2 h-2 rounded-full bg-emerald-500 shrink-0" aria-hidden="true"></span>
-              <div id="live-clock-time" class="font-mono text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 tabular-nums leading-none">
+              <div id="live-clock-time" class="font-mono text-lg sm:text-xl font-semibold tracking-tight text-slate-900 tabular-nums leading-none">
                 --:--:-- --
               </div>
               <span class="text-[11px] font-mono font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                 PHT
               </span>
             </div>
-            <div id="live-clock-date" class="text-xs sm:text-sm font-medium text-slate-600 truncate">
+            <div id="live-clock-date" class="text-xs font-medium text-slate-600 truncate">
               Loading current date...
             </div>
           </div>
 
           <!-- Center: Single Coherent Schedule Status Message -->
-          <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-            <span id="live-clock-period-badge" class="inline-flex items-center self-start sm:self-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+          <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5">
+            <span id="live-clock-period-badge" class="inline-flex items-center self-start sm:self-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
               Checking schedule...
             </span>
             <div class="min-w-0">
-              <div id="live-clock-summary-title" class="text-xs sm:text-sm font-semibold text-slate-900 truncate">
+              <div id="live-clock-summary-title" class="text-xs sm:text-[13px] font-semibold text-slate-900 truncate">
                 Checking current class schedule...
               </div>
-              <div id="live-clock-summary-sub" class="text-xs text-slate-500 truncate">
+              <div id="live-clock-summary-sub" class="text-[11px] text-slate-500 truncate">
                 Comparing local time (Asia/Manila) with department timetable
               </div>
             </div>
           </div>
 
           <!-- Right: Single Obvious Action Button -->
-          <div class="flex items-center justify-end shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-            <span id="live-clock-cta-btn" class="h-8 px-3.5 rounded-md text-xs font-medium bg-slate-100 group-hover:bg-blue-700 text-slate-700 group-hover:text-white border border-slate-200/80 group-hover:border-blue-700 inline-flex items-center gap-1.5 transition-colors">
+          <div class="flex items-center justify-end shrink-0 pt-1.5 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+            <span id="live-clock-cta-btn" class="h-8 px-3 py-1.5 rounded-md text-xs font-medium bg-slate-100 group-hover:bg-blue-700 text-slate-700 group-hover:text-white border border-slate-200/80 group-hover:border-blue-700 inline-flex items-center gap-1.5 transition-colors">
               <i data-lucide="clock" class="w-3.5 h-3.5" aria-hidden="true"></i>
               <span id="live-clock-cta-label">Check Current Classes</span>
               <i id="live-clock-chevron" data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform duration-200" aria-hidden="true"></i>
@@ -616,33 +616,40 @@
     <!-- =========================================================================
          TAB 1 (MAIN SCREEN): INSTRUCTOR TIMETABLES
          ========================================================================= -->
-    <div data-tab-content="instructor" class="space-y-4 min-w-0 max-w-full overflow-x-hidden">
+    <div data-tab-content="instructor" class="space-y-2.5 sm:space-y-3 min-w-0 max-w-full overflow-x-hidden">
       <!-- D. Compact Faculty Search & Selection Bar -->
-      <div class="bg-white border border-slate-200 rounded-lg shadow-2xs p-3.5 sm:p-4 min-w-0 max-w-full">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 min-w-0">
+      <div class="bg-white border border-slate-200 rounded-lg shadow-2xs px-3.5 py-2 sm:px-4 sm:py-2.5 min-w-0 max-w-full">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2.5 min-w-0">
           <!-- Primary Searchable Faculty Combobox -->
-          <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3.5 flex-1 min-w-0 max-w-2xl">
-            <label for="instructor-search-input" class="text-xs sm:text-sm font-semibold text-slate-800 shrink-0">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-1 min-w-0 max-w-2xl">
+            <label for="instructor-search-input" class="text-xs sm:text-[13px] font-semibold text-slate-800 shrink-0">
               Select Faculty
             </label>
             <div class="relative flex-1 w-full min-w-0" id="instructor-combobox-wrapper">
               <div class="relative flex items-center min-w-0">
-                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" aria-hidden="true"></i>
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" aria-hidden="true"></i>
                 <input id="instructor-search-input"
                        type="text"
                        autocomplete="off"
                        placeholder="Search by faculty name, course code, or room..."
-                       class="w-full h-9 pl-9 pr-14 rounded-md text-xs sm:text-sm font-medium bg-slate-50/70 border border-slate-300 text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 focus:bg-white transition-all min-w-0">
+                       class="w-full h-8 pl-8.5 pr-14 rounded-md text-xs font-medium bg-slate-50/70 border border-slate-300 text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 focus:bg-white transition-all min-w-0">
                 <div class="absolute right-1 flex items-center gap-0.5">
                   <button id="instructor-search-clear"
                           type="button"
-                          class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 hidden cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                          class="w-6.5 h-6.5 sm:w-7 sm:h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 hidden cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                           title="Clear search to browse all faculty"
                           aria-label="Clear faculty search">
                     <i data-lucide="x" class="w-3.5 h-3.5"></i>
                   </button>
                   <button id="instructor-search-toggle"
                           type="button"
+                          class="w-6.5 h-6.5 sm:w-7 sm:h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                          title="Open faculty directory list"
+                          aria-label="Toggle faculty directory dropdown">
+                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform duration-200" id="instructor-chevron"></i>
+                  </button>
+                </div>
+              </div>
                           class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-slate-500 hover:text-slate-800 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                           title="Open faculty directory list"
                           aria-label="Toggle faculty directory dropdown">

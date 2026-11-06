@@ -25,3 +25,8 @@ __pycache__/
 .codex/
 design-system/
 
+# Impeccable critique & audit records
+.impeccable/
+impeccable/
+
+
