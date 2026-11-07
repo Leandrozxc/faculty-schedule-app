@@ -42,27 +42,37 @@ A responsive, high-performance web application designed for universities and col
   - **Visual Calendar Grid:** Grouped period blocks with color-coded instructor badges.
   - **Searchable Data Table:** Dense tabular view with one-click CSV export.
 
-### 5. Room Occupancy & Double-Booking Clash Detector
+### 5. Room Occupancy, Vacant Room Finder & Interactive Conflict Resolver
 - **Room Registry:** Inspect room utilization for classrooms, computer laboratories, and lecture halls (e.g., `ALLIED 246`, `BGANNEX 13`, `SAL 171`, `GLEC 1`).
-- **Double-Booking Detection:** Automatically detects and highlights conflicting classes scheduled in the same room at the same time slot in red, detailing conflicting subjects and instructors.
+- **Interactive Conflict Resolver & In-Memory Room Reassignment:** Automatically detects and highlights conflicting classes scheduled in the same room and time slot. Click **"Resolve Conflict"** on any double-booked alert or cell to view all 100% vacant rooms for that exact period and reassign a session in-memory (persisted to `localStorage`).
+- **Instant Vacant Room Finder:** Switch between **Room Matrix** and **Find Vacant Room** to filter available classrooms by day, period (`P1`–`P9`), and building (`ALLIED`, `BGANNEX`, `SAL`, `GLEC`), complete with consecutive free-period durations (e.g., *"Free for 3 periods (4.5h)"*).
 - **One-Click Cross Navigation:** Click any room badge across any timetable to inspect that room's weekly occupancy immediately.
 
-### 6. Department Faculty Roster (FLR-001)
-- Comprehensive directory table summarizing all faculty members.
-- Displays academic status, qualifications, total weekly teaching loads, and office duty allocations.
-- One-click navigation to jump directly to any instructor's individual timetable.
+### 6. Student Section / Block Timetables
+- **Dedicated Section View:** Browse the complete weekly 6-Day × 9-Period timetable for any student section or block (e.g., `PO1`, `N5`, `BR1`).
+- **Section Summary Metrics:** Displays total courses, weekly contact hours, assigned rooms, and instructors for the selected student block, with `Prev` / `Next` stepping and `.ics` calendar export.
 
-### 7. Client-Side Excel Workbook Parser (Zero Backend Required)
+### 7. Faculty Teaching Load, Contact Hours & Overload Analytics (FLR-001 & FLR-002)
+- **Contact-Hour & Overload Classification:** Calculates weekly academic contact hours (`classes × 1.5 hrs`) and office duty hours, automatically classifying faculty loads into **Regular Load**, **Overload (`>18 hrs` / `>12 classes`)**, or **Part-Time / Underload** with visual load bars.
+- **Consecutive Teaching Streak Detection:** Flags back-to-back teaching streaks (`3+ consecutive periods` on a single day) on both the Instructor Profile Card and the Faculty Summary table.
+- **Batch Print All Faculty Slips (`Form FLR-002`):** One-click **"Batch Print All (FLR-002)"** generates print-formatted individual teaching load assignment sheets for all faculty members separated by page breaks.
+
+### 8. Time-Travel Simulation Mode, Calendar Export (`.ics`) & Deep-Link URLs
+- **Time-Travel Simulator ("Simulate Time"):** Preview how the live clock, `HAPPENING NOW` cards, progress bars, and availability drawer behave at any day of the week (`Monday`–`Sunday`) and period (`P1`–`P9` or `After Hours`).
+- **Calendar Export (`.ics`):** Export any instructor's or student section's weekly schedule to a recurring RFC 5545 `.ics` calendar file for Google Calendar, Apple Calendar, or Outlook.
+- **Shareable Deep-Link URLs:** Synchronizes the active tab, faculty member, room, and student section with URL query parameters (`?tab=...&faculty=...&room=...&section=...`) for one-click link sharing.
+
+### 9. Client-Side Excel Workbook Parser (Zero Backend Required)
 - **Dynamic File Import:** Upload any standard scheduling workbook (`.xlsx`, `.xls`, or `.csv`) using drag-and-drop or file picker.
 - **Fast Client-Side Parsing:** Powered by [SheetJS](https://sheetjs.com/), processing complex multi-sheet workbooks in browser memory in milliseconds.
 - **Smart Sheet Identification:** Automatically extracts data from `FLR-002` Individual Faculty timetable grids while safely ignoring administrative forms (`FLR-003`, `FLR-004`, `FLR-005`).
-- **Local Persistence:** Imported schedules are cached in browser `localStorage` so your data persists across page refreshes.
+- **Local Persistence:** Imported schedules and conflict reassignments are cached in browser `localStorage` so your data persists across page refreshes.
 - **Reset to Default:** Restore the built-in preloaded semester dataset anytime with one click.
 
-### 8. Dark Mode & Accessibility
+### 10. Dark Mode & Accessibility
 - **Theme Toggle:** Easily switch between Light and Dark themes via the header button.
 - **Persistent Preference:** Automatically respects the user's system color scheme (`prefers-color-scheme`) and persists user selection in `localStorage`.
-- **Keyboard Navigation & ARIA:** Comprehensive ARIA labels, keyboard-navigable dropdowns, and high-contrast color tokens adhering to accessibility standards.
+- **Keyboard Navigation & ARIA:** Comprehensive ARIA labels, keyboard-navigable dropdowns, `prefers-reduced-motion` support, and high-contrast color tokens adhering to accessibility standards.
 
 ---
 

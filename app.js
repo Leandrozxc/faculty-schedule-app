@@ -145,12 +145,25 @@ function getInstructorColor(name) {
 // Application State
 const state = {
   data: null,
-  activeTab: 'instructor', // 'instructor' (default student-first view), 'master', 'rooms', 'roster'
+  activeTab: 'instructor', // 'instructor', 'master', 'rooms', 'sections', 'roster'
   selectedRoom: '',
   selectedInstructor: '',
+  selectedSection: '',
   roomSearchQuery: '',
   instructorDayFilter: 'ALL',
   roomDayFilter: 'ALL',
+  sectionDayFilter: 'ALL',
+  roomViewMode: 'matrix', // 'matrix' or 'vacant'
+  vacantFilter: {
+    day: 'MONDAY',
+    periodIndex: 0,
+    building: 'ALL'
+  },
+  simulatedTime: {
+    enabled: false,
+    dayOfWeek: 'MONDAY',
+    minutesFromMidnight: 480 // 08:00 AM (P1)
+  },
   legendCollapsed: true,
   masterFilter: {
     day: 'ALL',
@@ -230,17 +243,67 @@ function loadInitialData() {
       showNotification('Loaded saved schedule from local storage', 'info');
     } catch (e) {
       console.warn('Failed to parse cached schedule, falling back to sample data', e);
-      state.data = window.SAMPLE_SCHEDULE_DATA;
+      state.data = JSON.parse(JSON.stringify(window.SAMPLE_SCHEDULE_DATA));
     }
   } else if (window.SAMPLE_SCHEDULE_DATA) {
-    state.data = window.SAMPLE_SCHEDULE_DATA;
+    state.data = JSON.parse(JSON.stringify(window.SAMPLE_SCHEDULE_DATA));
   }
 
   if (state.data) {
     annotateSessionPeriods(state.data);
+    recalculateConflicts(state.data);
     setupDefaults();
+    restoreStateFromUrl();
     renderAll();
   }
+}
+
+function getAllSections() {
+  if (!state.data || !Array.isArray(state.data.sessions)) return [];
+  const secSet = new Set();
+  state.data.sessions.forEach(s => {
+    if (!s.isDuty && s.section && s.section !== '-' && s.section.toUpperCase() !== 'TBA') {
+      secSet.add(String(s.section).trim());
+    }
+  });
+  return Array.from(secSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+function recalculateConflicts(data) {
+  if (!data || !Array.isArray(data.sessions)) return;
+  const slotMap = new Map();
+  const roomSet = new Set(Array.isArray(data.rooms) ? data.rooms : []);
+
+  data.sessions.forEach(s => {
+    if (!s || !s.room) return;
+    const r = String(s.room).trim();
+    if (r && r !== 'OFFICE / DEPT' && r !== 'TBA' && !s.isDuty) {
+      roomSet.add(r);
+      const pIdx = getSessionPeriodIndex(s);
+      const key = `${r}|${s.day}|${pIdx}`;
+      if (!slotMap.has(key)) slotMap.set(key, []);
+      slotMap.get(key).push(s);
+    }
+  });
+
+  data.rooms = Array.from(roomSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  const conflicts = [];
+  slotMap.forEach((sessions, key) => {
+    if (sessions.length > 1) {
+      const [room, day, pIdxStr] = key.split('|');
+      const pIdx = parseInt(pIdxStr, 10);
+      const pDef = PERIOD_DEFINITIONS[pIdx] || PERIOD_DEFINITIONS[0];
+      conflicts.push({
+        room,
+        day,
+        periodIndex: pIdx,
+        timeSlot: pDef.shortLabel || sessions[0].timeSlot,
+        sessions
+      });
+    }
+  });
+  data.conflicts = conflicts;
 }
 
 function setupDefaults() {
@@ -249,6 +312,15 @@ function setupDefaults() {
   }
   if (state.data.instructors && state.data.instructors.length > 0) {
     state.selectedInstructor = state.data.instructors[0].name;
+  }
+  const sections = getAllSections();
+  if (sections.length > 0) {
+    state.selectedSection = sections[0];
+  }
+  const snap = getManilaTimeSnapshot();
+  if (snap && snap.isAcademicDay) {
+    state.vacantFilter.day = snap.dayOfWeek;
+    state.vacantFilter.periodIndex = snap.activePeriod ? snap.activePeriod.index : 0;
   }
 }
 
@@ -438,6 +510,10 @@ function setupEventListeners() {
       if (uploadModal && !uploadModal.classList.contains('hidden')) {
         closeAccessibleModal(uploadModal);
       }
+      const conflictModal = document.getElementById('conflict-resolver-modal');
+      if (conflictModal && !conflictModal.classList.contains('hidden')) {
+        closeConflictResolverModal();
+      }
     }
   });
 
@@ -562,12 +638,66 @@ function setupEventListeners() {
 
 function performResetToSampleData() {
   localStorage.removeItem('cea_schedule_data');
-  state.data = window.SAMPLE_SCHEDULE_DATA;
+  state.data = JSON.parse(JSON.stringify(window.SAMPLE_SCHEDULE_DATA));
   annotateSessionPeriods(state.data);
+  recalculateConflicts(state.data);
   setupDefaults();
   renderAll();
   showNotification('Restored default CEA sample schedule dataset', 'success');
 }
+
+function syncStateToUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', state.activeTab || 'instructor');
+    if (state.selectedInstructor) params.set('faculty', state.selectedInstructor);
+    if (state.selectedRoom) params.set('room', state.selectedRoom);
+    if (state.selectedSection) params.set('section', state.selectedSection);
+    const newUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+    window.history.replaceState({}, '', newUrl);
+  } catch (e) {}
+}
+
+function restoreStateFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const faculty = params.get('faculty');
+    const room = params.get('room');
+    const section = params.get('section');
+
+    if (faculty && state.data && Array.isArray(state.data.instructors)) {
+      const match = state.data.instructors.find(i => i.name.toLowerCase() === faculty.toLowerCase());
+      if (match) state.selectedInstructor = match.name;
+    }
+    if (room && state.data && Array.isArray(state.data.rooms)) {
+      const matchRoom = state.data.rooms.find(r => r.toLowerCase() === room.toLowerCase());
+      if (matchRoom) state.selectedRoom = matchRoom;
+    }
+    if (section) {
+      const allSecs = getAllSections();
+      const matchSec = allSecs.find(s => s.toLowerCase() === section.toLowerCase());
+      if (matchSec) state.selectedSection = matchSec;
+    }
+    if (tab && ['instructor', 'master', 'rooms', 'sections', 'roster'].includes(tab)) {
+      setTimeout(() => switchTab(tab), 0);
+    }
+  } catch (e) {}
+}
+
+window.copyShareableLink = function() {
+  syncStateToUrl();
+  const url = window.location.href;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => {
+      showNotification('Copied direct timetable link to clipboard', 'success');
+    }).catch(() => {
+      showNotification('Shareable URL updated in browser address bar', 'info');
+    });
+  } else {
+    showNotification('Shareable URL updated in browser address bar', 'info');
+  }
+};
 
 // Switch Active Tab
 function switchTab(tabName) {
@@ -596,6 +726,7 @@ function switchTab(tabName) {
   // Re-render corresponding tab
   if (tabName === 'rooms') renderRoomOccupancy();
   if (tabName === 'master') renderMasterSchedule();
+  if (tabName === 'sections') renderSectionSchedule();
   if (tabName === 'instructor') {
     const searchInput = document.getElementById('instructor-search-input');
     if (searchInput && state.selectedInstructor) {
@@ -606,6 +737,7 @@ function switchTab(tabName) {
   }
   if (tabName === 'roster') renderRosterView();
 
+  syncStateToUrl();
   initIcons();
 }
 window.switchTab = switchTab;
@@ -616,6 +748,7 @@ function renderAll() {
   populateDropdowns();
   renderRoomOccupancy();
   renderMasterSchedule();
+  renderSectionSchedule();
   renderInstructorSchedule();
   renderRosterView();
   updateLiveClockUI(true);
@@ -689,6 +822,16 @@ function populateDropdowns() {
   if (masterInstSelect) {
     masterInstSelect.innerHTML = `<option value="ALL">All Faculty (${state.data.instructors.length})</option>` +
       state.data.instructors.map(i => `<option value="${i.name}">${i.name}</option>`).join('');
+  }
+
+  // Student Sections Dropdown
+  const sectionSelect = document.getElementById('section-select-dropdown');
+  const allSections = getAllSections();
+  if (sectionSelect) {
+    sectionSelect.innerHTML = allSections.map(sec => {
+      const count = state.data.sessions.filter(s => !s.isDuty && s.section === sec).length;
+      return `<option value="${escapeHtmlAttr(sec)}" ${sec === state.selectedSection ? 'selected' : ''}>Section ${sec} (${count} classes/wk)</option>`;
+    }).join('');
   }
 }
 
@@ -958,6 +1101,7 @@ window.selectInstructorAutocomplete = function(name) {
   updateInstructorQuickBadge();
   renderInstructorDirectoryPills();
   renderInstructorSchedule();
+  syncStateToUrl();
   initIcons();
 };
 
@@ -1152,14 +1296,342 @@ function renderRoomPills() {
 
 window.selectRoom = function(room) {
   state.selectedRoom = room;
+  if (state.roomViewMode !== 'matrix') {
+    setRoomViewMode('matrix');
+  }
   renderRoomPills();
   renderRoomOccupancy();
+  syncStateToUrl();
   initIcons();
 };
 
 window.selectRoomMobileDay = function(dayVal) {
   state.roomDayFilter = dayVal;
   renderRoomOccupancy();
+};
+
+function getRoomBuildingTag(roomCode) {
+  const r = String(roomCode || '').toUpperCase().trim();
+  if (r.startsWith('ALLIED')) return { code: 'ALLIED', label: 'Allied Bldg' };
+  if (r.startsWith('BGANNEX') || r.startsWith('BGA')) return { code: 'BGANNEX', label: 'BG Annex' };
+  if (r.startsWith('SAL')) return { code: 'SAL', label: 'SAL Bldg' };
+  if (r.startsWith('GLEC') || r.startsWith('GLE')) return { code: 'GLEC', label: 'GLEC Bldg' };
+  return { code: 'OTHER', label: 'Main / Other' };
+}
+
+function getVacantRoomsForSlot(day, periodIndex, buildingFilter = 'ALL') {
+  if (!state.data || !Array.isArray(state.data.rooms)) return [];
+  const pIdx = Number(periodIndex) || 0;
+  const allRooms = state.data.rooms.filter(r => r && r !== 'OFFICE / DEPT' && r !== 'TBA');
+  const sessionsOnDay = (state.data.sessions || []).filter(s => !s.isDuty && s.day === day);
+
+  const results = [];
+  allRooms.forEach(room => {
+    const bldg = getRoomBuildingTag(room);
+    if (buildingFilter !== 'ALL' && bldg.code !== buildingFilter) return;
+
+    const occupiedInTarget = sessionsOnDay.some(s => s.room === room && getSessionPeriodIndex(s) === pIdx);
+    if (occupiedInTarget) return;
+
+    // Count consecutive free periods starting from pIdx
+    let consecutiveFree = 0;
+    let lastFreeIdx = pIdx;
+    for (let idx = pIdx; idx < PERIOD_DEFINITIONS.length; idx++) {
+      const busy = sessionsOnDay.some(s => s.room === room && getSessionPeriodIndex(s) === idx);
+      if (busy) break;
+      consecutiveFree++;
+      lastFreeIdx = idx;
+    }
+
+    // Total classes in this room on this day
+    const dayRoomCount = sessionsOnDay.filter(s => s.room === room).length;
+    const endPeriodDef = PERIOD_DEFINITIONS[lastFreeIdx] || PERIOD_DEFINITIONS[pIdx];
+
+    results.push({
+      room,
+      buildingCode: bldg.code,
+      buildingLabel: bldg.label,
+      consecutiveFree,
+      freeHours: (consecutiveFree * 1.5).toFixed(1).replace(/\.0$/, ''),
+      freeUntilCode: endPeriodDef.code,
+      freeUntilTime: endPeriodDef.end,
+      dayRoomCount
+    });
+  });
+
+  return results.sort((a, b) => b.consecutiveFree - a.consecutiveFree || a.room.localeCompare(b.room, undefined, { numeric: true }));
+}
+
+window.setRoomViewMode = function(mode) {
+  state.roomViewMode = mode === 'vacant' ? 'vacant' : 'matrix';
+  const btnMatrix = document.getElementById('room-mode-matrix');
+  const btnVacant = document.getElementById('room-mode-vacant');
+  const matrixWrapper = document.getElementById('room-matrix-view-wrapper');
+  const vacantContainer = document.getElementById('vacant-room-finder-container');
+  const pillsContainer = document.getElementById('room-pills-container');
+  const searchWrapper = document.getElementById('room-search-wrapper');
+
+  const activeClasses = ['bg-white', 'text-slate-900', 'font-semibold', 'shadow-2xs'];
+  const inactiveClasses = ['text-slate-600', 'hover:text-slate-900', 'font-medium'];
+
+  if (state.roomViewMode === 'vacant') {
+    if (btnVacant) {
+      btnVacant.classList.add(...activeClasses);
+      btnVacant.classList.remove(...inactiveClasses);
+      btnVacant.setAttribute('aria-pressed', 'true');
+    }
+    if (btnMatrix) {
+      btnMatrix.classList.remove(...activeClasses);
+      btnMatrix.classList.add(...inactiveClasses);
+      btnMatrix.setAttribute('aria-pressed', 'false');
+    }
+    if (matrixWrapper) matrixWrapper.classList.add('hidden');
+    if (pillsContainer) pillsContainer.classList.add('hidden');
+    if (searchWrapper) searchWrapper.classList.add('hidden');
+    if (vacantContainer) {
+      vacantContainer.classList.remove('hidden');
+      renderVacantRoomFinder();
+    }
+  } else {
+    if (btnMatrix) {
+      btnMatrix.classList.add(...activeClasses);
+      btnMatrix.classList.remove(...inactiveClasses);
+      btnMatrix.setAttribute('aria-pressed', 'true');
+    }
+    if (btnVacant) {
+      btnVacant.classList.remove(...activeClasses);
+      btnVacant.classList.add(...inactiveClasses);
+      btnVacant.setAttribute('aria-pressed', 'false');
+    }
+    if (vacantContainer) vacantContainer.classList.add('hidden');
+    if (matrixWrapper) matrixWrapper.classList.remove('hidden');
+    if (pillsContainer) pillsContainer.classList.remove('hidden');
+    if (searchWrapper) searchWrapper.classList.remove('hidden');
+    renderRoomOccupancy();
+  }
+  initIcons();
+};
+
+window.updateVacantRoomFilter = function(key, val) {
+  if (key === 'periodIndex') {
+    state.vacantFilter.periodIndex = parseInt(val, 10) || 0;
+  } else if (key === 'day') {
+    state.vacantFilter.day = val;
+  } else if (key === 'building') {
+    state.vacantFilter.building = val;
+  }
+  renderVacantRoomFinder();
+  initIcons();
+};
+
+function renderVacantRoomFinder() {
+  const container = document.getElementById('vacant-room-finder-container');
+  if (!container || !state.data) return;
+
+  const { day, periodIndex, building } = state.vacantFilter;
+  const periodDef = PERIOD_DEFINITIONS[periodIndex] || PERIOD_DEFINITIONS[0];
+  const vacantRooms = getVacantRoomsForSlot(day, periodIndex, building);
+  const totalPhysicalRooms = (state.data.rooms || []).filter(r => r && r !== 'OFFICE / DEPT' && r !== 'TBA').length;
+
+  const buildings = [
+    { code: 'ALL', label: 'All Buildings' },
+    { code: 'ALLIED', label: 'Allied' },
+    { code: 'BGANNEX', label: 'BG Annex' },
+    { code: 'SAL', label: 'SAL' },
+    { code: 'GLEC', label: 'GLEC' }
+  ];
+
+  container.innerHTML = `
+    <div class="bg-white border border-slate-200 rounded-lg shadow-2xs p-4 space-y-4">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3.5 border-b border-slate-200">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-600 text-white">VACANT ROOM FINDER</span>
+            <h3 class="text-sm sm:text-base font-bold text-slate-900">Available Classrooms &amp; Laboratories</h3>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">Find 100% unscheduled rooms for make-up classes, exams, or conflict resolution</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <select aria-label="Select Day for Vacant Room Search"
+                  onchange="updateVacantRoomFilter('day', this.value)"
+                  class="h-8 px-2.5 rounded-md text-xs font-semibold bg-slate-50 border border-slate-300 text-slate-900 cursor-pointer">
+            ${["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"].map(d => `
+              <option value="${d}" ${d === day ? 'selected' : ''}>${DAY_TITLE_LABELS[d]}</option>
+            `).join('')}
+          </select>
+
+          <select aria-label="Select Period for Vacant Room Search"
+                  onchange="updateVacantRoomFilter('periodIndex', this.value)"
+                  class="h-8 px-2.5 rounded-md text-xs font-mono font-semibold bg-slate-50 border border-slate-300 text-slate-900 cursor-pointer">
+            ${PERIOD_DEFINITIONS.map(p => `
+              <option value="${p.index}" ${p.index === periodIndex ? 'selected' : ''}>${p.code} · ${p.shortLabel}</option>
+            `).join('')}
+          </select>
+
+          <div class="flex items-center gap-1 bg-slate-100 p-0.5 rounded-md">
+            ${buildings.map(b => `
+              <button type="button"
+                      onclick="updateVacantRoomFilter('building', '${b.code}')"
+                      class="h-7 px-2.5 rounded text-xs transition-colors cursor-pointer ${
+                        building === b.code
+                          ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900 font-medium'
+                      }">
+                ${b.label}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between text-xs text-slate-600">
+        <span>Showing <strong class="font-mono font-semibold text-emerald-700">${vacantRooms.length}</strong> vacant rooms out of <span class="font-mono">${totalPhysicalRooms}</span> total rooms on <strong>${DAY_TITLE_LABELS[day]} • ${periodDef.code} (${periodDef.label})</strong></span>
+        <span class="text-[11px] text-slate-400 hidden sm:inline">Click any room card to inspect its full weekly matrix</span>
+      </div>
+
+      ${vacantRooms.length === 0 ? `
+        <div class="p-8 text-center rounded-lg border border-slate-200 bg-slate-50/50 text-xs text-slate-500">
+          No vacant rooms match this building and time slot. Try selecting "All Buildings" or an adjacent period.
+        </div>
+      ` : `
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
+          ${vacantRooms.map(item => `
+            <div role="button" tabindex="0"
+                 onclick="selectRoom('${escapeHtmlAttr(item.room)}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectRoom('${escapeHtmlAttr(item.room)}');}"
+                 class="p-3 rounded-lg border border-slate-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/20 transition-all cursor-pointer shadow-2xs flex flex-col justify-between gap-2">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <span class="font-mono text-sm font-bold text-slate-900">${item.room}</span>
+                  <div class="text-[11px] text-slate-500 mt-0.5">${item.buildingLabel}</div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                  Vacant ${periodDef.code}
+                </span>
+              </div>
+              <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                <span class="font-medium text-emerald-800">
+                  Free for <strong>${item.consecutiveFree} ${item.consecutiveFree === 1 ? 'period' : 'periods'}</strong> (${item.freeHours}h · until ${item.freeUntilTime})
+                </span>
+                <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true"></i>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+  `;
+}
+
+window.openConflictResolverModal = function(room, day, periodIndex) {
+  const modal = document.getElementById('conflict-resolver-modal');
+  const subtitle = document.getElementById('conflict-modal-subtitle');
+  const body = document.getElementById('conflict-modal-body');
+  if (!modal || !body || !state.data) return;
+
+  const pIdx = Number(periodIndex) || 0;
+  const pDef = PERIOD_DEFINITIONS[pIdx] || PERIOD_DEFINITIONS[0];
+  const conflictingSessions = (state.data.sessions || []).filter(
+    s => !s.isDuty && s.room === room && s.day === day && getSessionPeriodIndex(s) === pIdx
+  );
+  const vacantRooms = getVacantRoomsForSlot(day, pIdx, 'ALL');
+
+  if (subtitle) {
+    subtitle.textContent = `${room} • ${DAY_TITLE_LABELS[day] || day} • ${pDef.code} (${pDef.label})`;
+  }
+
+  if (conflictingSessions.length <= 1) {
+    body.innerHTML = `
+      <div class="p-6 text-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs">
+        <div class="font-semibold text-sm">Conflict Resolved!</div>
+        <p class="mt-1">There are no longer overlapping sessions in ${room} during ${DAY_TITLE_LABELS[day]} ${pDef.code}.</p>
+      </div>
+    `;
+  } else {
+    body.innerHTML = `
+      <div class="p-3 rounded-md bg-red-50 border border-red-200 text-xs text-red-900">
+        <strong>${conflictingSessions.length} classes</strong> are simultaneously assigned to <strong class="font-mono">${room}</strong> on <strong>${DAY_TITLE_LABELS[day]} (${pDef.shortLabel})</strong>. Select a vacant room below to reassign one of the conflicting classes:
+      </div>
+
+      <div class="space-y-3">
+        ${conflictingSessions.map((s, idx) => {
+          const selectId = `conflict-reassign-select-${idx}`;
+          return `
+            <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-red-100 text-red-800">Class #${idx + 1}</span>
+                  <span class="text-sm font-bold text-slate-900">${s.subject}</span>
+                  <span class="text-xs font-mono px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700">Sec ${s.section}</span>
+                </div>
+                <div class="text-xs text-slate-600 mt-1">
+                  Instructor: <strong class="text-slate-900">${s.instructor}</strong> • Current Room: <span class="font-mono font-semibold text-red-700">${s.room}</span>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 shrink-0">
+                <select id="${selectId}" aria-label="Select new vacant room for ${escapeHtmlAttr(s.subject)}" class="h-8 px-2.5 rounded-md text-xs font-mono font-semibold bg-white border border-slate-300 text-slate-900 cursor-pointer">
+                  ${vacantRooms.map(v => `
+                    <option value="${escapeHtmlAttr(v.room)}">${v.room} (${v.buildingLabel} · Free ${v.freeHours}h)</option>
+                  `).join('')}
+                </select>
+                <button type="button"
+                        onclick="reassignSessionRoom('${escapeHtmlAttr(s.instructor)}', '${escapeHtmlAttr(s.day)}', ${pIdx}, '${escapeHtmlAttr(s.subject)}', '${escapeHtmlAttr(s.section)}', '${escapeHtmlAttr(s.room)}', document.getElementById('${selectId}').value)"
+                        class="h-8 px-3 rounded-md text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors inline-flex items-center gap-1.5 cursor-pointer shrink-0">
+                  <i data-lucide="check" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                  <span>Reassign Room</span>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  modal.classList.remove('hidden');
+  initIcons();
+};
+
+window.closeConflictResolverModal = function() {
+  const modal = document.getElementById('conflict-resolver-modal');
+  if (modal) modal.classList.add('hidden');
+};
+
+window.reassignSessionRoom = function(instructorName, day, periodIndex, subject, section, oldRoom, newRoom) {
+  if (!state.data || !newRoom || newRoom === oldRoom) return;
+  const pIdx = Number(periodIndex) || 0;
+
+  // Update matching session in state.data.sessions
+  let updatedFlat = false;
+  (state.data.sessions || []).forEach(s => {
+    if (!updatedFlat && s.instructor === instructorName && s.day === day && getSessionPeriodIndex(s) === pIdx && s.subject === subject && s.section === section && s.room === oldRoom) {
+      s.room = newRoom;
+      updatedFlat = true;
+    }
+  });
+
+  // Update matching session in state.data.instructors
+  const instObj = (state.data.instructors || []).find(i => i.name === instructorName);
+  if (instObj && Array.isArray(instObj.sessions)) {
+    let updatedInst = false;
+    instObj.sessions.forEach(s => {
+      if (!updatedInst && s.day === day && getSessionPeriodIndex(s) === pIdx && s.subject === subject && s.section === section && s.room === oldRoom) {
+        s.room = newRoom;
+        updatedInst = true;
+      }
+    });
+  }
+
+  recalculateConflicts(state.data);
+  try {
+    localStorage.setItem('cea_schedule_data', JSON.stringify(state.data));
+  } catch (e) {}
+
+  closeConflictResolverModal();
+  renderAll();
+  showNotification(`Reassigned ${subject} (Sec ${section}) from ${oldRoom} to ${newRoom}`, 'success');
 };
 
 /* =========================================================================
@@ -1224,17 +1696,31 @@ function renderRoomOccupancy() {
       conflictContainer.classList.remove('hidden');
       conflictContainer.innerHTML = `
         <div class="p-3.5 sm:p-4 rounded-lg bg-red-50/90 border border-red-300 text-red-950 shadow-2xs">
-          <div class="text-xs sm:text-sm font-semibold flex items-center gap-2 text-red-900">
-            <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600 shrink-0" aria-hidden="true"></i>
-            <span>Room Double-Booking Detected in ${currentRoom}</span>
+          <div class="text-xs sm:text-sm font-semibold flex items-center justify-between gap-2 text-red-900">
+            <div class="flex items-center gap-2">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600 shrink-0" aria-hidden="true"></i>
+              <span>Room Double-Booking Detected in ${currentRoom}</span>
+            </div>
+            <span class="text-[11px] font-normal text-red-700 hidden sm:inline">Click "Resolve Conflict" to reassign a session to a vacant room</span>
           </div>
           <div class="mt-2.5 text-xs space-y-1.5">
-            ${roomConflicts.map(c => `
-              <div class="bg-white px-3 py-2 rounded-md border border-red-200/80 flex flex-wrap items-center gap-2">
-                <span class="font-semibold text-slate-800">${DAY_TITLE_LABELS[c.day] || c.day} • <span class="font-mono">${c.timeSlot}</span>:</span>
-                ${c.sessions.map(s => `<span class="inline-flex items-center px-2 py-0.5 rounded bg-red-50 text-red-800 border border-red-200 font-medium">${s.subject} (Sec ${s.section}) — ${s.instructor}</span>`).join(' <span class="text-red-600 font-semibold text-[11px]">overlaps with</span> ')}
-              </div>
-            `).join('')}
+            ${roomConflicts.map(c => {
+              const pIdx = typeof c.periodIndex === 'number' ? c.periodIndex : ( c.sessions && c.sessions[0] ? getSessionPeriodIndex(c.sessions[0]) : 0 );
+              return `
+                <div class="bg-white px-3 py-2 rounded-md border border-red-200/80 flex flex-wrap items-center justify-between gap-2">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-semibold text-slate-800">${DAY_TITLE_LABELS[c.day] || c.day} • <span class="font-mono">${c.timeSlot}</span>:</span>
+                    ${c.sessions.map(s => `<span class="inline-flex items-center px-2 py-0.5 rounded bg-red-50 text-red-800 border border-red-200 font-medium">${s.subject} (Sec ${s.section}) — ${s.instructor}</span>`).join(' <span class="text-red-600 font-semibold text-[11px]">overlaps with</span> ')}
+                  </div>
+                  <button type="button"
+                          onclick="openConflictResolverModal('${escapeHtmlAttr(currentRoom)}', '${escapeHtmlAttr(c.day)}', ${pIdx})"
+                          class="h-7 px-2.5 rounded text-xs font-semibold bg-red-600 hover:bg-red-700 text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0">
+                    <i data-lucide="wrench" class="w-3 h-3" aria-hidden="true"></i>
+                    <span>Resolve Conflict</span>
+                  </button>
+                </div>
+              `;
+            }).join('')}
           </div>
         </div>
       `;
@@ -1378,10 +1864,14 @@ function renderRoomOccupancy() {
       } else {
         html += `
           <td class="p-1.5 border-r border-slate-200/80 last:border-r-0 align-top">
-            <div class="min-h-[56px] px-2.5 py-1.5 rounded-md bg-red-50 border border-red-300 border-l-[3px] border-l-red-600 text-red-950 flex flex-col justify-between">
+            <div role="button" tabindex="0"
+                 onclick="openConflictResolverModal('${escapeHtmlAttr(currentRoom)}', '${escapeHtmlAttr(day)}', ${pIdx})"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openConflictResolverModal('${escapeHtmlAttr(currentRoom)}', '${escapeHtmlAttr(day)}', ${pIdx});}"
+                 title="Click to resolve double-booking conflict and reassign a session to a vacant room"
+                 class="min-h-[56px] px-2.5 py-1.5 rounded-md bg-red-50 hover:bg-red-100/80 border border-red-300 border-l-[3px] border-l-red-600 text-red-950 flex flex-col justify-between cursor-pointer transition-colors">
               <div class="font-semibold text-[11px] text-red-700 flex items-center justify-between gap-1">
                 <span class="inline-flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3 h-3 text-red-600 shrink-0" aria-hidden="true"></i>Conflict (${matched.length})</span>
-                <span class="font-mono text-[11px]">${periodDef.code}</span>
+                <span class="px-1.5 py-0.2 rounded bg-red-600 text-white font-mono text-[11px]">Resolve</span>
               </div>
               <div class="text-[11px] font-semibold text-red-900 truncate mt-0.5" title="${escapeHtmlAttr(matched.map(m => `${m.subject} (${m.section})`).join(' vs '))}">
                 ${matched.map(m => `${m.subject} (${m.section})`).join(' / ')}
@@ -1832,6 +2322,77 @@ window.selectInstructorMobileDay = function(dayVal) {
   renderInstructorSchedule();
 };
 
+function getFacultyLoadAnalytics(faculty) {
+  const sessions = (faculty && Array.isArray(faculty.sessions)) ? faculty.sessions : [];
+  const academicSessions = sessions.filter(s => !s.isDuty);
+  const dutySessions = sessions.filter(s => s.isDuty);
+  const academicCount = academicSessions.length;
+  const dutyCount = dutySessions.length;
+  const academicHours = academicCount * 1.5;
+  const dutyHours = dutyCount * 1.5;
+  const totalHours = academicHours + dutyHours;
+  const isFT = Boolean(faculty && faculty.status && (faculty.status.includes('FT') || faculty.status.toUpperCase().includes('FULL-TIME')));
+
+  // Compute maximum back-to-back consecutive periods on any single day
+  const days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+  let maxStreak = 0;
+  let maxStreakDay = '';
+
+  days.forEach(d => {
+    const occupiedIndices = new Set(
+      sessions.filter(s => s.day === d).map(s => getSessionPeriodIndex(s))
+    );
+    let current = 0;
+    for (let p = 0; p < PERIOD_DEFINITIONS.length; p++) {
+      if (occupiedIndices.has(p)) {
+        current++;
+        if (current > maxStreak) {
+          maxStreak = current;
+          maxStreakDay = DAY_SHORT_LABELS[d] || d;
+        }
+      } else {
+        current = 0;
+      }
+    }
+  });
+
+  // Load classification (Standard full-time regular load: 12–18 academic contact hours / 8–12 classes)
+  let loadCode = 'REGULAR';
+  let loadLabel = 'Regular Load';
+  let loadBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  let barColorClass = 'bg-emerald-600';
+
+  if (academicHours > 18 || academicCount > 12) {
+    loadCode = 'OVERLOAD';
+    loadLabel = 'Overload';
+    loadBadgeClass = 'bg-red-50 text-red-700 border-red-200';
+    barColorClass = 'bg-red-600';
+  } else if (!isFT || academicHours < 12) {
+    loadCode = 'PART_TIME';
+    loadLabel = isFT ? 'Underload' : 'Part-Time Load';
+    loadBadgeClass = 'bg-amber-50 text-amber-800 border-amber-200';
+    barColorClass = 'bg-amber-500';
+  }
+
+  const loadPercent = Math.min(100, Math.round((academicHours / 21) * 100));
+
+  return {
+    academicCount,
+    dutyCount,
+    academicHours,
+    dutyHours,
+    totalHours,
+    maxStreak,
+    maxStreakDay,
+    loadCode,
+    loadLabel,
+    loadBadgeClass,
+    barColorClass,
+    loadPercent,
+    isFT
+  };
+}
+
 function renderInstructorSchedule() {
   if (!state.data || !state.data.instructors) return;
 
@@ -1849,13 +2410,14 @@ function renderInstructorSchedule() {
 
   const snapshot = getManilaTimeSnapshot();
   const liveStatus = getFacultyLiveScheduleStatus(faculty, snapshot);
+  const loadMetrics = getFacultyLoadAnalytics(faculty);
 
   const instColor = getInstructorColor(faculty.name);
   const academicSessions = (faculty.sessions || []).filter(s => !s.isDuty);
   const dutySessions = (faculty.sessions || []).filter(s => s.isDuty);
   const assignedRooms = [...new Set(academicSessions.map(s => s.room).filter(r => r && r !== 'OFFICE / DEPT'))];
   const uniqueSubjects = [...new Set(academicSessions.map(s => s.subject).filter(Boolean))];
-  const isFT = faculty.status && (faculty.status.includes('FT') || faculty.status.toUpperCase().includes('FULL-TIME'));
+  const isFT = loadMetrics.isFT;
 
   // Build Live Faculty Schedule Status Banner for Instructor Profile Card
   let liveProfileBannerHtml = '';
@@ -1978,6 +2540,14 @@ function renderInstructorSchedule() {
                 }">
                   ${isFT ? 'Full-Time Faculty' : (faculty.status || 'Part-Time')}
                 </span>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold border ${loadMetrics.loadBadgeClass}">
+                  ${loadMetrics.loadLabel} (${loadMetrics.academicHours.toFixed(1).replace(/\.0$/, '')}h)
+                </span>
+                ${loadMetrics.maxStreak >= 3 ? `
+                  <span class="px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-amber-50 text-amber-800 border border-amber-200" title="Back-to-back consecutive periods on ${loadMetrics.maxStreakDay}">
+                    ${loadMetrics.maxStreak}-Period Streak (${loadMetrics.maxStreakDay})
+                  </span>
+                ` : ''}
               </div>
 
               <div class="text-xs sm:text-[13px] text-slate-600 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -2006,25 +2576,33 @@ function renderInstructorSchedule() {
 
         <!-- Right: Grouped Weekly Workload & Quick Actions -->
         <div class="flex flex-wrap items-center justify-between lg:justify-end gap-3 sm:gap-4 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 lg:ml-auto shrink-0">
-          <div class="flex items-center gap-5 sm:gap-6 lg:border-r lg:border-slate-200 lg:pr-6">
+          <div class="flex items-center gap-4 sm:gap-5 lg:border-r lg:border-slate-200 lg:pr-5">
             <div>
-              <div class="text-xs font-medium text-slate-500">Weekly Classes</div>
-              <div class="text-sm sm:text-base font-bold text-slate-900 font-mono tabular-nums mt-0.5">${academicSessions.length} <span class="text-xs font-sans font-normal text-slate-500">classes</span></div>
+              <div class="text-xs font-medium text-slate-500">Academic Load</div>
+              <div class="text-sm sm:text-base font-bold text-slate-900 font-mono tabular-nums mt-0.5">${academicSessions.length} <span class="text-xs font-sans font-normal text-slate-500">(${loadMetrics.academicHours.toFixed(1).replace(/\.0$/, '')} hrs)</span></div>
             </div>
             <div>
-              <div class="text-xs font-medium text-slate-500">Office & Consultation</div>
-              <div class="text-sm sm:text-base font-bold text-slate-700 font-mono tabular-nums mt-0.5">${dutySessions.length} <span class="text-xs font-sans font-normal text-slate-500">periods</span></div>
+              <div class="text-xs font-medium text-slate-500">Office Duty</div>
+              <div class="text-sm sm:text-base font-bold text-slate-700 font-mono tabular-nums mt-0.5">${dutySessions.length} <span class="text-xs font-sans font-normal text-slate-500">(${loadMetrics.dutyHours.toFixed(1).replace(/\.0$/, '')} hrs)</span></div>
             </div>
           </div>
 
-          <div class="flex items-center gap-2 shrink-0">
-            <button type="button" onclick="viewInstructorInMaster('${escapeHtmlAttr(faculty.name)}')" class="h-8 px-3 rounded-md text-xs font-medium border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-colors cursor-pointer" title="View this instructor inside the Master Weekly Schedule">
+          <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+            <button type="button" onclick="viewInstructorInMaster('${escapeHtmlAttr(faculty.name)}')" class="h-8 px-2.5 rounded-md text-xs font-medium border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-colors cursor-pointer" title="View this instructor inside the Master Weekly Schedule">
               <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-500" aria-hidden="true"></i>
-              <span>Master Schedule</span>
+              <span class="hidden sm:inline">Master</span>
             </button>
-            <button type="button" onclick="window.print()" class="h-8 px-3 rounded-md text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-colors cursor-pointer" title="Print current instructor timetable">
+            <button type="button" onclick="exportInstructorIcs('${escapeHtmlAttr(faculty.name)}')" class="h-8 px-2.5 rounded-md text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-colors cursor-pointer" title="Export recurring weekly iCalendar (.ics) file for Google/Outlook/Apple Calendar">
+              <i data-lucide="calendar-plus" class="w-3.5 h-3.5 text-blue-600" aria-hidden="true"></i>
+              <span>.ics</span>
+            </button>
+            <button type="button" onclick="copyShareableLink()" class="h-8 px-2.5 rounded-md text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-colors cursor-pointer" title="Copy direct link to this timetable">
+              <i data-lucide="share-2" class="w-3.5 h-3.5 text-slate-500" aria-hidden="true"></i>
+              <span class="hidden sm:inline">Share</span>
+            </button>
+            <button type="button" onclick="window.print()" class="h-8 px-2.5 rounded-md text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-colors cursor-pointer" title="Print current instructor timetable">
               <i data-lucide="printer" class="w-3.5 h-3.5 text-slate-500" aria-hidden="true"></i>
-              <span>Print</span>
+              <span class="hidden sm:inline">Print</span>
             </button>
           </div>
         </div>
@@ -2295,23 +2873,302 @@ function renderInstructorSchedule() {
 }
 
 /* =========================================================================
-   TAB 4: DEPARTMENT FACULTY ROSTER (FLR-001)
+   TAB 4: STUDENT SECTION / BLOCK TIMETABLE VIEW
+   ========================================================================= */
+window.selectSection = function(sectionCode) {
+  if (!sectionCode) return;
+  state.selectedSection = sectionCode;
+  const selectEl = document.getElementById('section-select-dropdown');
+  if (selectEl) selectEl.value = sectionCode;
+  renderSectionSchedule();
+  syncStateToUrl();
+  initIcons();
+};
+
+window.stepSection = function(delta) {
+  const sections = getAllSections();
+  if (sections.length === 0) return;
+  const currentIdx = sections.indexOf(state.selectedSection);
+  const nextIdx = currentIdx === -1 ? 0 : (currentIdx + delta + sections.length) % sections.length;
+  selectSection(sections[nextIdx]);
+};
+
+window.selectSectionMobileDay = function(dayVal) {
+  state.sectionDayFilter = dayVal;
+  renderSectionSchedule();
+};
+
+function renderSectionSchedule() {
+  if (!state.data || !Array.isArray(state.data.sessions)) return;
+
+  const allSections = getAllSections();
+  if (!state.selectedSection && allSections.length > 0) {
+    state.selectedSection = allSections[0];
+  }
+
+  const currentSec = state.selectedSection;
+  const profileEl = document.getElementById('section-profile-card');
+  const container = document.getElementById('section-timetable-container');
+  const badgeEl = document.getElementById('section-quick-badge');
+  const pillsBar = document.getElementById('section-pills-bar');
+  const selectEl = document.getElementById('section-select-dropdown');
+
+  if (selectEl && selectEl.value !== currentSec) {
+    selectEl.value = currentSec;
+  }
+
+  const secIdx = allSections.indexOf(currentSec);
+  if (badgeEl) {
+    badgeEl.innerHTML = secIdx !== -1
+      ? `Section <span class="font-semibold text-slate-800">${secIdx + 1}</span> of <span class="font-semibold text-slate-800">${allSections.length}</span>`
+      : '';
+  }
+
+  if (pillsBar) {
+    pillsBar.innerHTML = allSections.slice(0, 14).map(sec => {
+      const isSel = sec === currentSec;
+      return `
+        <button type="button"
+                onclick="selectSection('${escapeHtmlAttr(sec)}')"
+                class="h-7 px-2.5 rounded text-xs font-mono border shrink-0 transition-colors cursor-pointer ${
+                  isSel
+                    ? 'bg-blue-700 text-white border-blue-700 font-semibold'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 font-medium'
+                }">
+          ${sec}
+        </button>
+      `;
+    }).join('');
+  }
+
+  if (!currentSec) {
+    if (container) container.innerHTML = '<div class="p-8 text-center text-slate-400">No student sections available.</div>';
+    return;
+  }
+
+  const secSessions = state.data.sessions.filter(s => !s.isDuty && s.section === currentSec);
+  const uniqueCourses = [...new Set(secSessions.map(s => s.subject).filter(Boolean))];
+  const uniqueRooms = [...new Set(secSessions.map(s => s.room).filter(r => r && r !== 'OFFICE / DEPT'))];
+  const uniqueInstructors = [...new Set(secSessions.map(s => s.instructor).filter(Boolean))];
+  const contactHours = (secSessions.length * 1.5).toFixed(1).replace(/\.0$/, '');
+
+  if (profileEl) {
+    profileEl.innerHTML = `
+      <div class="bg-white p-3.5 sm:px-4 sm:py-3 rounded-lg border border-slate-200 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <span class="px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-blue-700 text-white">BLOCK ${currentSec}</span>
+            <h2 class="text-sm sm:text-base font-bold text-slate-900">Student Section ${currentSec} Weekly Class Schedule</h2>
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">${uniqueCourses.length} Courses • ${contactHours} hrs/wk</span>
+          </div>
+          <div class="text-xs text-slate-600 mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <span>Courses: <strong class="font-mono text-slate-900">${uniqueCourses.join(', ') || '-'}</strong></span>
+            <span class="text-slate-300">•</span>
+            <span>Rooms: <strong class="font-mono text-slate-800">${uniqueRooms.join(', ') || '-'}</strong></span>
+            <span class="text-slate-300">•</span>
+            <span>Instructors: <strong class="text-slate-800">${uniqueInstructors.map(i => i.split(',')[0]).join(', ')}</strong></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button"
+                  onclick="exportSectionIcs('${escapeHtmlAttr(currentSec)}')"
+                  class="h-8 px-3 rounded-md text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Export Section ${escapeHtmlAttr(currentSec)} recurring calendar (.ics)">
+            <i data-lucide="calendar-plus" class="w-3.5 h-3.5 text-blue-600" aria-hidden="true"></i>
+            <span>Export .ics</span>
+          </button>
+          <button type="button"
+                  onclick="copyShareableLink()"
+                  class="h-8 px-3 rounded-md text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Copy direct link to Section ${escapeHtmlAttr(currentSec)}">
+            <i data-lucide="share-2" class="w-3.5 h-3.5 text-slate-500" aria-hidden="true"></i>
+            <span>Share</span>
+          </button>
+          <button type="button"
+                  onclick="window.print()"
+                  class="h-8 px-3 rounded-md text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+            <i data-lucide="printer" class="w-3.5 h-3.5 text-slate-500" aria-hidden="true"></i>
+            <span>Print</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  const days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+  const activeMobileDay = state.sectionDayFilter || 'ALL';
+  const mobileDays = activeMobileDay === 'ALL' ? days : [activeMobileDay];
+
+  let html = `
+    <div class="md:hidden space-y-3">
+      <div class="bg-white rounded-lg border border-slate-200 p-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <button type="button" onclick="selectSectionMobileDay('ALL')" class="h-7 px-2.5 rounded-md text-xs border shrink-0 transition-colors cursor-pointer ${
+          activeMobileDay === 'ALL' ? 'bg-blue-700 text-white border-blue-700 font-semibold' : 'bg-slate-50 text-slate-700 border-slate-200 font-medium'
+        }">
+          All (${secSessions.length})
+        </button>
+        ${days.map(d => {
+          const dCount = secSessions.filter(s => s.day === d).length;
+          const isSel = activeMobileDay === d;
+          return `
+            <button type="button" onclick="selectSectionMobileDay('${d}')" class="h-7 px-2.5 rounded-md text-xs border shrink-0 transition-colors cursor-pointer ${
+              isSel ? 'bg-blue-700 text-white border-blue-700 font-semibold' : 'bg-white text-slate-700 border-slate-200 font-medium'
+            }">
+              ${DAY_SHORT_LABELS[d]} (${dCount})
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      ${mobileDays.map(d => {
+        const daySessions = secSessions.filter(s => s.day === d);
+        return `
+          <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+            <div class="bg-slate-100/90 border-b border-slate-200 text-slate-900 px-3.5 py-2 flex items-center justify-between text-xs">
+              <span class="font-semibold">${DAY_TITLE_LABELS[d]} — Sec ${currentSec}</span>
+              <span class="px-2 py-0.5 rounded text-[11px] bg-white text-slate-700 border border-slate-200 font-medium">${daySessions.length} classes</span>
+            </div>
+            <div class="divide-y divide-slate-100">
+              ${daySessions.length === 0 ? `
+                <div class="p-4 text-center text-xs text-slate-400">No classes scheduled on ${DAY_TITLE_LABELS[d]}</div>
+              ` : daySessions.map(s => {
+                const pDef = PERIOD_DEFINITIONS[getSessionPeriodIndex(s)] || PERIOD_DEFINITIONS[0];
+                const color = getInstructorColor(s.instructor);
+                return `
+                  <div role="button" tabindex="0" onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')" class="px-3.5 py-2.5 bg-white hover:bg-blue-50/40 flex items-center justify-between gap-2 cursor-pointer">
+                    <div>
+                      <div class="text-xs font-mono text-slate-600">${pDef.code} • ${pDef.shortLabel}</div>
+                      <div class="text-sm font-semibold text-slate-900 mt-0.5">${s.subject}</div>
+                    </div>
+                    <div class="text-right">
+                      <span class="px-2 py-0.5 rounded font-mono text-[11px] bg-slate-100 text-slate-800 border border-slate-200">${s.room}</span>
+                      <div class="text-xs text-slate-600 mt-1 flex items-center justify-end gap-1.5">
+                        <span class="w-2 h-2 rounded-full" style="background-color: ${color.ring}"></span>
+                        <span>${s.instructor.split(',')[0]}</span>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <div class="hidden md:block overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-2xs">
+      <table class="w-full border-collapse text-left min-w-[1100px] table-fixed">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-200 text-slate-700 text-xs font-semibold">
+            <th class="py-3 px-3.5 w-[132px] min-w-[132px] border-r border-slate-200 sticky left-0 bg-slate-50 z-10 sticky-time-col">Period / Time</th>
+            ${days.map(d => {
+              const dCount = secSessions.filter(s => s.day === d).length;
+              return `
+                <th class="py-3 px-3 min-w-[162px] border-r border-slate-200 last:border-r-0">
+                  <div class="flex items-center justify-between gap-1">
+                    <span>${DAY_TITLE_LABELS[d]}</span>
+                    ${dCount > 0 ? `<span class="text-[11px] font-mono px-1.5 py-0.2 rounded bg-slate-200/70 text-slate-700">${dCount}</span>` : ''}
+                  </div>
+                </th>
+              `;
+            }).join('')}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 text-sm">
+          ${PERIOD_DEFINITIONS.map((periodDef, pIdx) => {
+            const rowBg = pIdx % 2 === 1 ? 'bg-slate-50/35' : 'bg-white';
+            return `
+              <tr class="${rowBg}">
+                <td class="py-2.5 px-3.5 border-r border-slate-200 sticky left-0 ${pIdx % 2 === 1 ? 'bg-[#F8FAFC]' : 'bg-white'} z-10 align-top sticky-time-col">
+                  ${formatPeriodAxisCell(periodDef)}
+                </td>
+                ${days.map(day => {
+                  const matched = secSessions.filter(s => s.day === day && getSessionPeriodIndex(s) === pIdx);
+                  if (matched.length === 0) {
+                    return `<td class="p-1.5 border-r border-slate-200/80 last:border-r-0 align-top"><div class="h-14"></div></td>`;
+                  }
+                  return `
+                    <td class="p-1.5 border-r border-slate-200/80 last:border-r-0 align-top">
+                      <div class="space-y-1.5">
+                        ${matched.map(s => {
+                          const color = getInstructorColor(s.instructor);
+                          return `
+                            <div role="button" tabindex="0"
+                                 onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')"
+                                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();viewInstructor('${escapeHtmlAttr(s.instructor)}');}"
+                                 class="min-h-[56px] px-2.5 py-2 rounded-md border border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30 text-xs flex flex-col justify-between cursor-pointer transition-colors shadow-2xs">
+                              <div class="flex items-center justify-between gap-1.5 min-w-0">
+                                <span class="font-semibold text-[13px] text-slate-900 truncate">${s.subject}</span>
+                                <span class="text-[11px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 shrink-0">${s.room}</span>
+                              </div>
+                              <div class="flex items-center justify-between gap-1.5 min-w-0 mt-1.5 pt-1 border-t border-slate-100">
+                                <span class="text-[11px] font-medium text-slate-700 truncate flex items-center gap-1.5">
+                                  <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${color.ring}"></span>
+                                  <span class="truncate">${s.instructor.split(',')[0]}</span>
+                                </span>
+                                <span class="text-[11px] font-mono text-slate-500 tabular-nums shrink-0">${periodDef.shortLabel}</span>
+                              </div>
+                            </div>
+                          `;
+                        }).join('')}
+                      </div>
+                    </td>
+                  `;
+                }).join('')}
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  if (container) container.innerHTML = html;
+  initIcons();
+}
+
+/* =========================================================================
+   TAB 5: DEPARTMENT FACULTY ROSTER & LOAD ANALYTICS (FLR-001)
    ========================================================================= */
 function renderRosterView() {
   if (!state.data) return;
 
   const container = document.getElementById('roster-container');
+  const summaryEl = document.getElementById('roster-analytics-summary');
   if (!container) return;
 
   const instructors = state.data.instructors || [];
+  const analyticsList = instructors.map(inst => ({
+    inst,
+    metrics: getFacultyLoadAnalytics(inst)
+  }));
+
+  const overloadCount = analyticsList.filter(a => a.metrics.loadCode === 'OVERLOAD').length;
+  const regularCount = analyticsList.filter(a => a.metrics.loadCode === 'REGULAR').length;
+  const totalDeptHours = analyticsList.reduce((acc, a) => acc + a.metrics.academicHours, 0);
+
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <span class="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-medium border border-slate-200">
+        Total Dept Contact: <strong>${totalDeptHours.toFixed(1).replace(/\.0$/, '')} hrs/wk</strong>
+      </span>
+      <span class="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 font-mono text-[11px] font-medium border border-emerald-200">
+        Regular: <strong>${regularCount}</strong>
+      </span>
+      ${overloadCount > 0 ? `
+        <span class="px-2.5 py-1 rounded-md bg-red-50 text-red-700 font-mono text-[11px] font-semibold border border-red-200">
+          Overload (&gt;18h): <strong>${overloadCount}</strong>
+        </span>
+      ` : ''}
+    `;
+  }
 
   container.innerHTML = `
     <!-- 1. Mobile Faculty Cards (<640px) -->
     <div class="sm:hidden space-y-2.5">
-      ${instructors.map((inst, idx) => {
+      ${analyticsList.map(({ inst, metrics }, idx) => {
         const color = getInstructorColor(inst.name);
-        const classCount = inst.sessions.filter(s => !s.isDuty).length;
-        const isFT = inst.status && (inst.status.includes('FT') || inst.status.toUpperCase().includes('FULL-TIME'));
         return `
           <div class="bg-white rounded-lg border border-slate-200 p-3.5 flex flex-col gap-2 shadow-2xs">
             <div class="flex items-start justify-between gap-2">
@@ -2320,15 +3177,13 @@ function renderRosterView() {
                 <span class="text-xs font-mono text-slate-500">${String(idx + 1).padStart(2, '0')}</span>
                 <span class="font-semibold text-sm text-slate-900 truncate">${inst.name}</span>
               </div>
-              <span class="px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${
-                isFT ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
-              }">
-                ${inst.status}
+              <span class="px-2 py-0.5 rounded-full text-[11px] font-medium border shrink-0 ${metrics.loadBadgeClass}">
+                ${metrics.loadLabel}
               </span>
             </div>
             <div class="text-xs text-slate-600 leading-snug">${inst.qualification || '-'}</div>
             <div class="flex items-center justify-between pt-2 border-t border-slate-100">
-              <span class="text-xs font-mono font-semibold text-slate-700">${classCount} classes / wk</span>
+              <span class="text-xs font-mono font-semibold text-slate-700">${metrics.academicCount} classes (${metrics.academicHours.toFixed(1).replace(/\.0$/, '')} hrs/wk)</span>
               <button type="button" class="px-3 py-1 rounded-md text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 cursor-pointer"
                       onclick="viewInstructor('${escapeHtmlAttr(inst.name)}')">
                 View Timetable →
@@ -2346,16 +3201,18 @@ function renderRosterView() {
           <tr>
             <th class="py-3 px-4 w-12">#</th>
             <th class="py-3 px-4">Faculty Member</th>
-            <th class="py-3 px-4">Employment Status</th>
+            <th class="py-3 px-4">Status</th>
             <th class="py-3 px-4">Academic Qualification</th>
-            <th class="py-3 px-4 text-center">Weekly Classes</th>
+            <th class="py-3 px-4 text-center">Classes / Duty</th>
+            <th class="py-3 px-4">Weekly Contact Hours</th>
+            <th class="py-3 px-4">Load Classification</th>
             <th class="py-3 px-4 text-right">Timetable</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200 text-xs">
-          ${instructors.map((inst, idx) => {
+          ${analyticsList.map(({ inst, metrics }, idx) => {
             const color = getInstructorColor(inst.name);
-            const isFT = inst.status && (inst.status.includes('FT') || inst.status.toUpperCase().includes('FULL-TIME'));
+            const isFT = metrics.isFT;
             return `
               <tr class="hover:bg-slate-50/80 transition-colors">
                 <td class="py-3 px-4 text-slate-400 font-mono text-xs tabular-nums">${String(idx + 1).padStart(2, '0')}</td>
@@ -2372,9 +3229,32 @@ function renderRosterView() {
                     ${inst.status}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-slate-600 text-xs">${inst.qualification || '-'}</td>
-                <td class="py-3 px-4 text-center font-semibold font-mono text-slate-900 tabular-nums">${inst.sessions.filter(s => !s.isDuty).length}</td>
-                <td class="py-3 px-4 text-right">
+                <td class="py-3 px-4 text-slate-600 text-xs max-w-[260px] truncate" title="${escapeHtmlAttr(inst.qualification || '-')}">${inst.qualification || '-'}</td>
+                <td class="py-3 px-4 text-center font-mono tabular-nums">
+                  <span class="font-semibold text-slate-900">${metrics.academicCount}</span>
+                  <span class="text-slate-400"> / ${metrics.dutyCount} duty</span>
+                </td>
+                <td class="py-3 px-4">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-20 bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                      <div class="${metrics.barColorClass} h-full rounded-full" style="width: ${metrics.loadPercent}%"></div>
+                    </div>
+                    <span class="font-mono font-semibold text-slate-900 tabular-nums">${metrics.academicHours.toFixed(1).replace(/\.0$/, '')} hrs</span>
+                  </div>
+                </td>
+                <td class="py-3 px-4">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold border ${metrics.loadBadgeClass}">
+                      ${metrics.loadLabel}
+                    </span>
+                    ${metrics.maxStreak >= 3 ? `
+                      <span class="px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-700" title="${metrics.maxStreak} back-to-back periods on ${metrics.maxStreakDay}">
+                        ${metrics.maxStreak}p streak
+                      </span>
+                    ` : ''}
+                  </div>
+                </td>
+                <td class="py-3 px-4 text-right whitespace-nowrap">
                   <button type="button" class="px-3 py-1 rounded-md text-xs font-medium text-slate-700 bg-white hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 border border-slate-200 transition-colors cursor-pointer"
                           onclick="viewInstructor('${escapeHtmlAttr(inst.name)}')">
                     View Timetable →
@@ -2388,6 +3268,177 @@ function renderRosterView() {
     </div>
   `;
 }
+
+/* =========================================================================
+   CALENDAR EXPORT (.ICS) & BATCH PRINT ALL FACULTY (FLR-002)
+   ========================================================================= */
+function buildIcsCalendarFile(title, sessions) {
+  const dayByDayCode = {
+    MONDAY: { byday: 'MO', offset: 0 },
+    TUESDAY: { byday: 'TU', offset: 1 },
+    WEDNESDAY: { byday: 'WE', offset: 2 },
+    THURSDAY: { byday: 'TH', offset: 3 },
+    FRIDAY: { byday: 'FR', offset: 4 },
+    SATURDAY: { byday: 'SA', offset: 5 }
+  };
+
+  // Reference Monday: 2026-08-17 (First Semester 2026-2027)
+  const formatIcsTime = (dayOffset, minutesFromMidnight) => {
+    const dayNum = 17 + dayOffset;
+    const dayStr = String(dayNum).padStart(2, '0');
+    const hh = String(Math.floor(minutesFromMidnight / 60)).padStart(2, '0');
+    const mm = String(minutesFromMidnight % 60).padStart(2, '0');
+    return `202608${dayStr}T${hh}${mm}00`;
+  };
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//CEA Academic Timetable Portal//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${title}`,
+    'X-WR-TIMEZONE:Asia/Manila'
+  ];
+
+  sessions.forEach((s, idx) => {
+    const dayInfo = dayByDayCode[s.day];
+    if (!dayInfo) return;
+    const pIdx = getSessionPeriodIndex(s);
+    const pDef = PERIOD_DEFINITIONS[pIdx] || PERIOD_DEFINITIONS[0];
+    const dtStart = formatIcsTime(dayInfo.offset, pDef.startMin);
+    const dtEnd = formatIcsTime(dayInfo.offset, pDef.endMin);
+    const summary = s.isDuty
+      ? `${s.dutyName || 'Office Duty'} (${s.instructor})`
+      : `${s.subject} (Sec ${s.section}) — ${s.room}`;
+    const desc = `Instructor: ${s.instructor}\\nCourse: ${s.subject}\\nSection: ${s.section}\\nRoom: ${s.room}\\nPeriod: ${pDef.code} (${pDef.label})`;
+
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:cea-2026-${idx}-${Date.now()}@cea-timetable.edu`,
+      `DTSTAMP:20260817T000000Z`,
+      `DTSTART;TZID=Asia/Manila:${dtStart}`,
+      `DTEND;TZID=Asia/Manila:${dtEnd}`,
+      `RRULE:FREQ=WEEKLY;BYDAY=${dayInfo.byday};COUNT=18`,
+      `SUMMARY:${summary}`,
+      `LOCATION:${s.room}`,
+      `DESCRIPTION:${desc}`,
+      'END:VEVENT'
+    );
+  });
+
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+window.exportInstructorIcs = function(instructorName) {
+  if (!state.data || !Array.isArray(state.data.instructors)) return;
+  const inst = state.data.instructors.find(i => i.name === instructorName);
+  if (!inst || !Array.isArray(inst.sessions)) return;
+
+  const icsContent = buildIcsCalendarFile(`CEA Schedule - ${inst.name}`, inst.sessions);
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const safeName = inst.name.replace(/[^a-z0-9]/gi, '_');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `CEA_Timetable_${safeName}.ics`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showNotification(`Exported .ics calendar for ${inst.name}`, 'success');
+};
+
+window.exportSectionIcs = function(sectionCode) {
+  if (!state.data || !Array.isArray(state.data.sessions)) return;
+  const sessions = state.data.sessions.filter(s => !s.isDuty && s.section === sectionCode);
+  if (sessions.length === 0) return;
+
+  const icsContent = buildIcsCalendarFile(`CEA Section ${sectionCode} Schedule`, sessions);
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `CEA_Section_${sectionCode}_Timetable.ics`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showNotification(`Exported .ics calendar for Section ${sectionCode}`, 'success');
+};
+
+window.batchPrintAllFaculty = function() {
+  if (!state.data || !Array.isArray(state.data.instructors)) return;
+  const batchContainer = document.getElementById('batch-print-container');
+  if (!batchContainer) return;
+
+  const days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+  const deptTitle = (state.data.meta && state.data.meta.department) || 'Department of Engineering Mathematics, Physics & Chemistry';
+  const periodTitle = (state.data.meta && state.data.meta.period) || 'First Semester 2026–2027';
+
+  batchContainer.innerHTML = state.data.instructors.map((inst) => {
+    const metrics = getFacultyLoadAnalytics(inst);
+    return `
+      <div class="batch-print-page p-6 bg-white text-slate-900">
+        <div class="flex items-start justify-between border-b-2 border-slate-800 pb-3 mb-4">
+          <div>
+            <div class="text-xs font-mono font-bold uppercase tracking-wider text-slate-500">Form FLR-002 • Individual Faculty Teaching Load Assignment</div>
+            <h2 class="text-lg font-bold text-slate-900 mt-0.5">${inst.name}</h2>
+            <div class="text-xs text-slate-600">${inst.qualification || deptTitle} • ${periodTitle}</div>
+          </div>
+          <div class="text-right text-xs font-mono">
+            <div>Status: <strong>${inst.status || 'FT'}</strong></div>
+            <div>Academic Load: <strong>${metrics.academicCount} classes (${metrics.academicHours.toFixed(1).replace(/\.0$/, '')} hrs/wk)</strong></div>
+            <div>Office Duty: <strong>${metrics.dutyCount} periods (${metrics.dutyHours.toFixed(1).replace(/\.0$/, '')} hrs/wk)</strong></div>
+          </div>
+        </div>
+
+        <table class="w-full border-collapse border border-slate-400 text-[11px]">
+          <thead>
+            <tr class="bg-slate-100">
+              <th class="border border-slate-400 py-1.5 px-2 text-left w-28">Period / Time</th>
+              ${days.map(d => `<th class="border border-slate-400 py-1.5 px-2 text-left">${DAY_TITLE_LABELS[d]}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${PERIOD_DEFINITIONS.map((pDef, pIdx) => `
+              <tr>
+                <td class="border border-slate-400 py-1.5 px-2 font-mono align-top">
+                  <div class="font-bold">${pDef.code}</div>
+                  <div>${pDef.shortLabel}</div>
+                </td>
+                ${days.map(day => {
+                  const matched = (inst.sessions || []).filter(s => s.day === day && getSessionPeriodIndex(s) === pIdx);
+                  if (matched.length === 0) return '<td class="border border-slate-400 py-1.5 px-2"></td>';
+                  return `
+                    <td class="border border-slate-400 py-1.5 px-2 align-top">
+                      ${matched.map(s => `
+                        <div class="mb-1 last:mb-0">
+                          <div class="font-bold">${s.isDuty ? (s.dutyName || 'Office Duty') : s.subject}</div>
+                          <div class="font-mono">${s.isDuty ? 'Office Duty' : `Sec ${s.section}`} • ${s.room}</div>
+                        </div>
+                      `).join('')}
+                    </td>
+                  `;
+                }).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }).join('');
+
+  document.body.classList.add('batch-printing');
+  batchContainer.classList.remove('hidden');
+
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      document.body.classList.remove('batch-printing');
+      batchContainer.classList.add('hidden');
+    }, 500);
+  }, 150);
+};
 
 // Collapsible Faculty Color Key Bar in Master Timetable
 function renderInstructorLegend() {
@@ -2685,8 +3736,109 @@ const manilaPartsFormatter = new Intl.DateTimeFormat('en-US', {
   hourCycle: 'h23'
 });
 
+function formatSimulatedClockDisplay(minutesFromMidnight) {
+  const totalMin = Math.max(0, Math.min(1439, Number(minutesFromMidnight) || 480));
+  const h24 = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  const period = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${String(h12).padStart(2, '0')}:${String(min).padStart(2, '0')}:00 ${period}`;
+}
+
+window.toggleTimeSimulator = function() {
+  const bar = document.getElementById('time-simulator-bar');
+  const btn = document.getElementById('sim-time-toggle-btn');
+  if (!bar) return;
+
+  const isHidden = bar.classList.contains('hidden');
+  if (isHidden) {
+    bar.classList.remove('hidden');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+    if (!state.simulatedTime.enabled) {
+      applySimulatedTime();
+    }
+  } else {
+    bar.classList.add('hidden');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+  initIcons();
+};
+
+window.applySimulatedTime = function() {
+  const daySelect = document.getElementById('sim-day-select');
+  const periodSelect = document.getElementById('sim-period-select');
+  const tzBadge = document.getElementById('live-clock-tz-badge');
+  const toggleLabel = document.getElementById('sim-time-toggle-label');
+
+  state.simulatedTime.enabled = true;
+  state.simulatedTime.dayOfWeek = daySelect ? daySelect.value : 'MONDAY';
+  state.simulatedTime.minutesFromMidnight = periodSelect ? parseInt(periodSelect.value, 10) : 480;
+
+  if (tzBadge) {
+    tzBadge.textContent = 'SIMULATED';
+    tzBadge.className = 'text-[11px] font-mono font-semibold text-white bg-amber-600 px-1.5 py-0.5 rounded';
+  }
+  if (toggleLabel) {
+    toggleLabel.textContent = 'Simulating Time';
+  }
+
+  updateLiveClockUI(true);
+  renderInstructorSchedule();
+  initIcons();
+};
+
+window.resetSimulatedTime = function() {
+  state.simulatedTime.enabled = false;
+  const bar = document.getElementById('time-simulator-bar');
+  const btn = document.getElementById('sim-time-toggle-btn');
+  const tzBadge = document.getElementById('live-clock-tz-badge');
+  const toggleLabel = document.getElementById('sim-time-toggle-label');
+
+  if (bar) bar.classList.add('hidden');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+  if (tzBadge) {
+    tzBadge.textContent = 'PHT';
+    tzBadge.className = 'text-[11px] font-mono font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded';
+  }
+  if (toggleLabel) {
+    toggleLabel.textContent = 'Simulate Time';
+  }
+
+  updateLiveClockUI(true);
+  renderInstructorSchedule();
+  showNotification('Returned to live Philippine Standard Time (PHT)', 'info');
+  initIcons();
+};
+
 function getManilaTimeSnapshot() {
   const now = window.__TEST_CLOCK_DATE ? new Date(window.__TEST_CLOCK_DATE) : new Date();
+
+  if (state.simulatedTime && state.simulatedTime.enabled) {
+    const dayOfWeek = state.simulatedTime.dayOfWeek || 'MONDAY';
+    const dayTitle = DAY_TITLE_LABELS[dayOfWeek] || 'Monday';
+    const minutesFromMidnight = Number(state.simulatedTime.minutesFromMidnight) || 480;
+    const isAcademicDay = dayOfWeek !== 'SUNDAY';
+    const activePeriod = isAcademicDay
+      ? (PERIOD_DEFINITIONS.find(p => minutesFromMidnight >= p.startMin && minutesFromMidnight < p.endMin) || null)
+      : null;
+    const nextPeriod = isAcademicDay
+      ? (PERIOD_DEFINITIONS.find(p => p.startMin > minutesFromMidnight) || null)
+      : null;
+
+    return {
+      now,
+      timeDisplay: formatSimulatedClockDisplay(minutesFromMidnight),
+      dateDisplay: `Simulated • ${dayTitle}`,
+      dayOfWeek,
+      dayTitle,
+      isAcademicDay,
+      minutesFromMidnight,
+      dateKey: `SIM-${dayOfWeek}-${minutesFromMidnight}`,
+      activePeriod,
+      nextPeriod,
+      isSimulated: true
+    };
+  }
 
   const parts = {};
   manilaPartsFormatter.formatToParts(now).forEach(p => {
@@ -2718,7 +3870,8 @@ function getManilaTimeSnapshot() {
     minutesFromMidnight,
     dateKey,
     activePeriod,
-    nextPeriod
+    nextPeriod,
+    isSimulated: false
   };
 }
 
