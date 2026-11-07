@@ -2189,7 +2189,7 @@ function renderInstructorSchedule() {
             <span class="tabular-nums">${liveStatus.remainingMin}m left</span>
           </div>
           <div class="w-full h-1 rounded-full bg-slate-200/90 overflow-hidden">
-            <div class="h-full rounded-full bg-emerald-500" style="width: ${liveStatus.progressPercent}%"></div>
+            <div class="h-full rounded-full bg-emerald-500 transition-all duration-700 ease-linear" style="width: ${liveStatus.progressPercent}%"></div>
           </div>
         </div>
       ` : '';

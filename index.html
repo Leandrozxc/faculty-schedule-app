@@ -134,13 +134,124 @@
       border-color: #E2E8F0;
     }
 
+    /* =========================================================================
+       PURPOSEFUL MOTION DESIGN SYSTEM (Impeccable Motion Thesis)
+       ========================================================================= */
+    /* 1. Focal Moment: Live Clock Breathing Respiration Pulse */
+    @keyframes live-clock-breathe {
+      0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45);
+      }
+      50% {
+        transform: scale(1.1);
+        opacity: 0.88;
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0);
+      }
+    }
+    .live-pulse-indicator {
+      animation: live-clock-breathe 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    /* 2. Focal Moment: "Happening Now" Active Schedule Card Arrival */
+    @keyframes live-active-arrival {
+      0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.35);
+      }
+      100% {
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+      }
+    }
+    .live-active-schedule-card {
+      animation: live-active-arrival 360ms cubic-bezier(0.16, 1, 0.3, 1);
+      transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 140ms ease, border-color 140ms ease;
+    }
+
+    /* 3. Continuity: Seamless Tab Content View Transitions */
+    [data-tab-content]:not(.hidden) {
+      animation: tab-content-reveal 190ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    }
+    @keyframes tab-content-reveal {
+      from {
+        opacity: 0;
+        transform: translateY(3px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* 4. Continuity: Drawer & Suggestions Popover Reveals */
+    #live-availability-panel:not(.hidden) {
+      animation: drawer-reveal 210ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes drawer-reveal {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    #instructor-suggestions-dropdown:not(.hidden) {
+      animation: popover-reveal 160ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes popover-reveal {
+      from {
+        opacity: 0;
+        transform: translateY(-3px) scale(0.995);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    /* 5. Feedback: Tactile Schedule Entries & Interactive Micro-Elevations */
     .schedule-entry {
-      transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+      transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    }
+    .schedule-entry:hover,
+    [data-tab-content="instructor"] .timetable-grid div[data-schedule-type]:hover {
+      transform: translateY(-1px);
+    }
+    .schedule-entry:active,
+    [data-tab-content="instructor"] .timetable-grid div[data-schedule-type]:active {
+      transform: translateY(0);
     }
     .schedule-entry:focus-visible {
       outline: 2px solid var(--color-accent);
       outline-offset: -2px;
       z-index: 10;
+    }
+
+    /* 6. Feedback: Modal Dialog Backdrop & Card Arrivals */
+    #upload-modal:not(.hidden),
+    #reset-confirm-modal:not(.hidden) {
+      animation: modal-backdrop-in 170ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    #upload-modal:not(.hidden) > div,
+    #reset-confirm-modal:not(.hidden) > div {
+      animation: modal-card-in 210ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes modal-backdrop-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes modal-card-in {
+      from {
+        opacity: 0;
+        transform: scale(0.97) translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
     }
 
     /* =========================================================================
@@ -369,16 +480,24 @@
 
     @media (prefers-reduced-motion: reduce) {
       *, ::before, ::after {
+        animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
       }
       .animate-pulse,
-      .animate-spin {
+      .animate-spin,
+      .live-pulse-indicator,
+      .live-active-schedule-card,
+      [data-tab-content]:not(.hidden),
+      #live-availability-panel:not(.hidden),
+      #instructor-suggestions-dropdown:not(.hidden),
+      #upload-modal:not(.hidden),
+      #upload-modal:not(.hidden) > div,
+      #reset-confirm-modal:not(.hidden),
+      #reset-confirm-modal:not(.hidden) > div {
         animation: none !important;
-      }
-      /* Maintain gentle, non-disorienting transitions to preserve UI state feedback */
-      * {
-        transition-duration: 0.1s !important;
+        transform: none !important;
       }
     }
 
@@ -568,7 +687,7 @@
           <!-- Left: Prominent Digital Clock & Full Date -->
           <div class="flex flex-wrap items-baseline gap-x-3.5 gap-y-1 min-w-0 sm:pr-4 lg:border-r lg:border-slate-200">
             <div class="flex items-center gap-2">
-              <span id="live-clock-pulse" class="w-2 h-2 rounded-full bg-emerald-500 shrink-0" aria-hidden="true"></span>
+              <span id="live-clock-pulse" class="w-2 h-2 rounded-full bg-emerald-500 shrink-0 live-pulse-indicator" aria-hidden="true"></span>
               <div id="live-clock-time" class="font-mono text-lg sm:text-xl font-semibold tracking-tight text-slate-900 tabular-nums leading-none">
                 --:--:-- --
               </div>
