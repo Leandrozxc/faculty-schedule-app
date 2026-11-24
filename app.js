@@ -887,24 +887,51 @@ function setupEventListeners() {
 }
 
 function performResetToSampleData() {
-  const previousData = state.data ? JSON.parse(JSON.stringify(state.data)) : null;
   safeStorageRemove('cea_schedule_data');
+  safeStorageRemove('cea_schedule_history');
+  state.history = [];
+  state.pendingImport = null;
+  state.roomSearchQuery = '';
+  state.instructorDayFilter = 'ALL';
+  state.roomDayFilter = 'ALL';
+  state.sectionDayFilter = 'ALL';
+  state.masterFilter = {
+    day: 'ALL',
+    timePeriod: 'ALL',
+    room: 'ALL',
+    instructor: 'ALL',
+    search: '',
+    viewMode: state.masterFilter ? state.masterFilter.viewMode : 'grid'
+  };
+  state.rosterFilter = {
+    search: '',
+    loadFilter: 'ALL',
+    sortBy: 'NAME_ASC'
+  };
+
+  // Reset UI filter input elements if present
+  const roomSearchEl = document.getElementById('room-search-input');
+  if (roomSearchEl) roomSearchEl.value = '';
+  const masterSearchEl = document.getElementById('filter-master-search');
+  if (masterSearchEl) masterSearchEl.value = '';
+  const rosterSearchEl = document.getElementById('roster-search-input');
+  if (rosterSearchEl) rosterSearchEl.value = '';
+  const rosterStatusEl = document.getElementById('roster-filter-status');
+  if (rosterStatusEl) rosterStatusEl.value = 'ALL';
+  const rosterSortEl = document.getElementById('roster-sort-by');
+  if (rosterSortEl) rosterSortEl.value = 'NAME_ASC';
+
+  if (state.simulatedTime && state.simulatedTime.enabled && typeof window.resetSimulatedTime === 'function') {
+    window.resetSimulatedTime();
+  }
+
   state.data = JSON.parse(JSON.stringify(window.SAMPLE_SCHEDULE_DATA));
   annotateSessionPeriods(state.data);
   recalculateConflicts(state.data);
-
-  recordScheduleHistoryEntry({
-    actionType: 'RESET',
-    title: 'Reset to Default Sample Dataset',
-    summary: 'Discarded custom changes and restored the default CEA semester dataset.',
-    source: 'Default Dataset',
-    previousData,
-    updatedData: state.data
-  });
-
   setupDefaults();
+  updateHistoryBadgeUI();
   renderAll();
-  showNotification('Restored default CEA sample schedule dataset', 'success');
+  showNotification('Restored default CEA sample dataset and cleared local changes', 'success');
 }
 
 function syncStateToUrl() {
