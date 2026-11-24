@@ -234,12 +234,14 @@
     /* 6. Feedback: Modal Dialog Backdrop & Card Arrivals */
     #upload-modal:not(.hidden),
     #reset-confirm-modal:not(.hidden),
-    #conflict-resolver-modal:not(.hidden) {
+    #conflict-resolver-modal:not(.hidden),
+    #history-modal:not(.hidden) {
       animation: modal-backdrop-in 170ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
     #upload-modal:not(.hidden) > div,
     #reset-confirm-modal:not(.hidden) > div,
-    #conflict-resolver-modal:not(.hidden) > div {
+    #conflict-resolver-modal:not(.hidden) > div,
+    #history-modal:not(.hidden) > div {
       animation: modal-card-in 210ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
     @keyframes modal-backdrop-in {
@@ -509,7 +511,7 @@
 
     @media print {
       body { background: white !important; }
-      header, nav, #live-clock-section, .no-print, button, #upload-modal, #reset-confirm-modal, #conflict-resolver-modal { display: none !important; }
+      header, nav, #live-clock-section, .no-print, button, #upload-modal, #reset-confirm-modal, #conflict-resolver-modal, #history-modal { display: none !important; }
       .print-full { width: 100% !important; border: none !important; box-shadow: none !important; }
       table { page-break-inside: auto; }
       tr { page-break-inside: avoid; page-break-after: auto; }
@@ -585,11 +587,21 @@
             <span id="theme-toggle-label" class="hidden sm:inline text-xs font-medium">Dark</span>
           </button>
 
-          <!-- Secondary Utility Group (Export, Print, Reset) -->
+          <!-- Secondary Utility Group (History, Export, Print, Reset) -->
           <div class="inline-flex items-center rounded-md border border-slate-200 bg-white shadow-2xs divide-x divide-slate-200">
+            <button id="open-history-btn"
+                    type="button"
+                    onclick="openScheduleHistoryModal()"
+                    class="h-8 px-2.5 sm:px-3 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5 cursor-pointer rounded-l-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    title="View schedule change history and restore snapshots">
+              <i data-lucide="history" class="w-3.5 h-3.5 text-slate-500" aria-hidden="true"></i>
+              <span class="hidden sm:inline">History</span>
+              <span id="history-count-badge" class="hidden px-1.5 py-0.2 rounded-full text-[10px] font-mono font-semibold bg-blue-50 text-blue-700 border border-blue-200">0</span>
+            </button>
+
             <button id="export-csv-btn"
                     type="button"
-                    class="h-8 px-2.5 sm:px-3 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5 cursor-pointer rounded-l-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    class="h-8 px-2.5 sm:px-3 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                     title="Export full schedule to CSV">
               <i data-lucide="download" class="w-3.5 h-3.5 text-slate-500" aria-hidden="true"></i>
               <span class="hidden sm:inline">Export CSV</span>
@@ -629,14 +641,24 @@
          ========================================================================= -->
     <nav aria-label="Schedule Views" class="bg-white border-t border-slate-100">
       <div class="max-w-[1520px] mx-auto px-2 sm:px-6 lg:px-8 flex items-center justify-between">
-        <div role="tablist" class="grid grid-cols-5 sm:flex sm:items-center sm:gap-1 w-full sm:w-auto">
+        <div role="tablist" class="grid grid-cols-6 sm:flex sm:items-center sm:gap-1 w-full sm:w-auto">
+          <button data-tab-target="overview"
+                  role="tab"
+                  aria-selected="false"
+                  type="button"
+                  class="nav-tab-btn h-9 sm:h-10 px-1.5 sm:px-3.5 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent hover:border-slate-300 transition-colors flex items-center justify-center sm:justify-start gap-1.5 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
+            <i data-lucide="layout-dashboard" class="w-4 h-4 hidden sm:inline shrink-0" aria-hidden="true"></i>
+            <span class="sm:hidden truncate">Overview</span>
+            <span class="hidden sm:inline">Overview</span>
+          </button>
+
           <button data-tab-target="instructor"
                   role="tab"
                   aria-selected="true"
                   type="button"
                   class="nav-tab-btn h-9 sm:h-10 px-1.5 sm:px-3.5 text-xs sm:text-sm font-semibold text-blue-700 border-b-2 border-blue-700 transition-colors flex items-center justify-center sm:justify-start gap-1.5 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
             <i data-lucide="user-check" class="w-4 h-4 hidden sm:inline shrink-0" aria-hidden="true"></i>
-            <span class="sm:hidden truncate">Instructors</span>
+            <span class="sm:hidden truncate">Faculty</span>
             <span class="hidden sm:inline">Instructor Timetables</span>
           </button>
 
@@ -647,7 +669,7 @@
                   class="nav-tab-btn h-9 sm:h-10 px-1.5 sm:px-3.5 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent hover:border-slate-300 transition-colors flex items-center justify-center sm:justify-start gap-1.5 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
             <i data-lucide="calendar-days" class="w-4 h-4 hidden sm:inline shrink-0" aria-hidden="true"></i>
             <span class="sm:hidden truncate">Master</span>
-            <span class="hidden sm:inline">Master Weekly Schedule</span>
+            <span class="hidden sm:inline">Master Schedule</span>
           </button>
 
           <button data-tab-target="rooms"
@@ -675,9 +697,9 @@
                   aria-selected="false"
                   type="button"
                   class="nav-tab-btn h-9 sm:h-10 px-1.5 sm:px-3.5 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent hover:border-slate-300 transition-colors flex items-center justify-center sm:justify-start gap-1.5 whitespace-nowrap min-w-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50">
-            <i data-lucide="users" class="w-4 h-4 hidden sm:inline shrink-0" aria-hidden="true"></i>
-            <span class="sm:hidden truncate">Faculty</span>
-            <span class="hidden sm:inline">Faculty Summary</span>
+            <i data-lucide="bar-chart-3" class="w-4 h-4 hidden sm:inline shrink-0" aria-hidden="true"></i>
+            <span class="sm:hidden truncate">Reports</span>
+            <span class="hidden sm:inline">Workload &amp; Reports</span>
           </button>
         </div>
 
@@ -803,54 +825,83 @@
     </section>
 
     <!-- =========================================================================
-         TAB 1 (MAIN SCREEN): INSTRUCTOR TIMETABLES
+         TAB 0: OVERVIEW DASHBOARD (AT-A-GLANCE ACADEMIC SUMMARY & HEALTH)
+         ========================================================================= -->
+    <div data-tab-content="overview" class="hidden space-y-4 min-w-0 max-w-full overflow-x-hidden">
+      <div id="overview-dashboard-container" class="space-y-4 min-w-0 max-w-full"></div>
+    </div>
+
+    <!-- =========================================================================
+         TAB 1 (MAIN SCREEN): INSTRUCTOR TIMETABLES & FACULTY AVAILABILITY FINDER
          ========================================================================= -->
     <div data-tab-content="instructor" class="space-y-2.5 sm:space-y-3 min-w-0 max-w-full overflow-x-hidden">
-      <!-- D. Compact Faculty Search & Selection Bar -->
+      <!-- D. Compact Faculty Search, Selection & Availability Mode Bar -->
       <div class="bg-white border border-slate-200 rounded-lg shadow-2xs px-3.5 py-2 sm:px-4 sm:py-2.5 min-w-0 max-w-full">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2.5 min-w-0">
-          <!-- Primary Searchable Faculty Combobox -->
-          <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-1 min-w-0 max-w-2xl">
-            <label for="instructor-search-input" class="text-xs sm:text-[13px] font-semibold text-slate-800 shrink-0">
-              Select Faculty
-            </label>
-            <div class="relative flex-1 w-full min-w-0" id="instructor-combobox-wrapper">
-              <div class="relative flex items-center min-w-0">
-                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" aria-hidden="true"></i>
-                <input id="instructor-search-input"
-                       type="text"
-                       autocomplete="off"
-                       placeholder="Search by faculty name, course code, or room..."
-                       class="w-full h-8 pl-9 pr-16 rounded-md text-xs font-medium bg-slate-50/70 border border-slate-300 text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 focus:bg-white transition-all min-w-0">
-                <div class="absolute right-1 flex items-center gap-0.5">
-                  <button id="instructor-search-clear"
-                          type="button"
-                          class="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 hidden cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                          title="Clear search to browse all faculty"
-                          aria-label="Clear faculty search">
-                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                  </button>
-                  <button id="instructor-search-toggle"
-                          type="button"
-                          class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                          title="Open faculty directory list"
-                          aria-label="Toggle faculty directory dropdown">
-                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform duration-200" id="instructor-chevron"></i>
-                  </button>
-                </div>
-              </div>
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 min-w-0">
+          <div class="flex flex-wrap items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
+            <!-- Sub-Mode Toggle: Individual Faculty Timetable vs Faculty Availability Finder -->
+            <span role="group" aria-label="Faculty view mode" class="inline-flex rounded-md bg-slate-100 p-0.5 border border-slate-200/80 shrink-0">
+              <button id="instructor-mode-timetable"
+                      type="button"
+                      onclick="setInstructorViewMode('timetable')"
+                      aria-pressed="true"
+                      class="h-7 px-2.5 sm:px-3 rounded text-xs font-semibold bg-white text-slate-900 shadow-2xs inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+                <i data-lucide="calendar" class="w-3.5 h-3.5 text-blue-700" aria-hidden="true"></i>
+                <span>Faculty Timetable</span>
+              </button>
+              <button id="instructor-mode-availability"
+                      type="button"
+                      onclick="setInstructorViewMode('availability')"
+                      aria-pressed="false"
+                      class="h-7 px-2.5 sm:px-3 rounded text-xs font-medium text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+                <i data-lucide="user-search" class="w-3.5 h-3.5 text-emerald-600" aria-hidden="true"></i>
+                <span>Find Available Faculty</span>
+              </button>
+            </span>
 
-              <!-- Searchable Faculty Directory Popover -->
-              <div id="instructor-suggestions-dropdown"
-                   role="listbox"
-                   aria-label="Faculty directory suggestions"
-                   class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto divide-y divide-slate-100 hidden">
+            <!-- Primary Searchable Faculty Combobox -->
+            <div id="instructor-search-toolbar-group" class="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-[240px] max-w-xl">
+              <label for="instructor-search-input" class="sr-only">
+                Select Faculty
+              </label>
+              <div class="relative flex-1 w-full min-w-0" id="instructor-combobox-wrapper">
+                <div class="relative flex items-center min-w-0">
+                  <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" aria-hidden="true"></i>
+                  <input id="instructor-search-input"
+                         type="text"
+                         autocomplete="off"
+                         placeholder="Search by faculty name, course code, or room..."
+                         class="w-full h-8 pl-9 pr-16 rounded-md text-xs font-medium bg-slate-50/70 border border-slate-300 text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 focus:bg-white transition-all min-w-0">
+                  <div class="absolute right-1 flex items-center gap-0.5">
+                    <button id="instructor-search-clear"
+                            type="button"
+                            class="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 hidden cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                            title="Clear search to browse all faculty"
+                            aria-label="Clear faculty search">
+                      <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button id="instructor-search-toggle"
+                            type="button"
+                            class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                            title="Open faculty directory list"
+                            aria-label="Toggle faculty directory dropdown">
+                      <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform duration-200" id="instructor-chevron"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Searchable Faculty Directory Popover -->
+                <div id="instructor-suggestions-dropdown"
+                     role="listbox"
+                     aria-label="Faculty directory suggestions"
+                     class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto divide-y divide-slate-100 hidden">
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Compact Quick-Switch Stepper & Selected Faculty Indicator -->
-          <div class="flex items-center justify-between md:justify-end gap-2.5 shrink-0">
+          <div id="instructor-stepper-group" class="flex items-center justify-between lg:justify-end gap-2.5 shrink-0">
             <div id="instructor-quick-badge" class="flex items-center gap-2 text-xs text-slate-600"></div>
 
             <span class="inline-flex items-center rounded-md border border-slate-200 divide-x divide-slate-200 overflow-hidden" role="group" aria-label="Quick switch faculty">
@@ -876,11 +927,17 @@
         <div id="instructor-directory-pills" class="hidden"></div>
       </div>
 
-      <!-- E. Instructor Summary Header -->
-      <div id="instructor-profile-card" class="min-w-0 max-w-full"></div>
+      <!-- Mode B: Faculty Availability Finder Container -->
+      <div id="faculty-availability-finder-container" class="hidden space-y-3 min-w-0 max-w-full"></div>
 
-      <!-- F. Instructor Timetable Grid -->
-      <div id="instructor-timetable-container" class="min-w-0 max-w-full"></div>
+      <!-- Mode A: Individual Faculty Profile & Timetable Grid -->
+      <div id="instructor-timetable-view-wrapper" class="space-y-2.5 sm:space-y-3 min-w-0 max-w-full">
+        <!-- E. Instructor Summary Header -->
+        <div id="instructor-profile-card" class="min-w-0 max-w-full"></div>
+
+        <!-- F. Instructor Timetable Grid -->
+        <div id="instructor-timetable-container" class="min-w-0 max-w-full"></div>
+      </div>
     </div>
 
     <!-- =========================================================================
@@ -1080,20 +1137,66 @@
          TAB 5: FACULTY SUMMARY ROSTER & LOAD ANALYTICS (FLR-001)
          ========================================================================= -->
     <div data-tab-content="roster" class="hidden space-y-4 min-w-0 max-w-full overflow-x-hidden">
-      <div class="bg-white px-4 py-3.5 border border-slate-200 rounded-lg shadow-2xs flex flex-wrap items-center justify-between gap-3 min-w-0">
-        <div class="min-w-0">
-          <h2 class="text-sm font-semibold text-slate-900">Faculty Teaching Load &amp; Overload Analytics (Form FLR-001)</h2>
-          <p class="text-xs text-slate-500 mt-0.5">Departmental faculty roster, contact-hour calculations, consecutive period streaks, and FLR-002 batch printing</p>
+      <div class="bg-white px-4 py-3.5 border border-slate-200 rounded-lg shadow-2xs space-y-3 min-w-0">
+        <div class="flex flex-wrap items-center justify-between gap-3 min-w-0">
+          <div class="min-w-0">
+            <h2 class="text-sm font-semibold text-slate-900">Faculty Teaching Load, Workload Analytics &amp; Reports (Form FLR-001)</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Departmental faculty directory, contact-hour calculations, consecutive period streaks, workload CSV export, and FLR-002 batch printing</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <div id="roster-analytics-summary" class="flex flex-wrap items-center gap-2 text-xs"></div>
+            <button type="button"
+                    onclick="exportWorkloadReportCsv()"
+                    class="h-8 px-3 rounded-md text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200 shadow-2xs inline-flex items-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    title="Export faculty teaching load and workload report to CSV">
+              <i data-lucide="file-Spreadsheet" class="w-3.5 h-3.5 text-emerald-600" aria-hidden="true"></i>
+              <span>Export Workload CSV</span>
+            </button>
+            <button type="button"
+                    onclick="batchPrintAllFaculty()"
+                    class="h-8 px-3.5 rounded-md text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow-2xs inline-flex items-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    title="Generate and print individual Form FLR-002 timetable slips for all faculty members">
+              <i data-lucide="printer" class="w-3.5 h-3.5" aria-hidden="true"></i>
+              <span>Batch Print All (FLR-002)</span>
+            </button>
+          </div>
         </div>
-        <div class="flex flex-wrap items-center gap-2 shrink-0">
-          <div id="roster-analytics-summary" class="flex flex-wrap items-center gap-2 text-xs"></div>
-          <button type="button"
-                  onclick="batchPrintAllFaculty()"
-                  class="h-8 px-3.5 rounded-md text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow-2xs inline-flex items-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                  title="Generate and print individual Form FLR-002 timetable slips for all faculty members">
-            <i data-lucide="printer" class="w-3.5 h-3.5" aria-hidden="true"></i>
-            <span>Batch Print All (FLR-002)</span>
-          </button>
+
+        <!-- Roster Search, Filter & Sort Toolbar -->
+        <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+          <div class="relative flex-1 min-w-[220px] max-w-md flex items-center">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" aria-hidden="true"></i>
+            <input id="roster-search-input"
+                   type="text"
+                   oninput="updateRosterFilter('search', this.value)"
+                   placeholder="Filter faculty by name, qualification, or course..."
+                   class="w-full h-8 pl-8 pr-3 rounded-md text-xs bg-slate-50/70 border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white">
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <label for="roster-filter-status" class="text-xs text-slate-500 font-medium">Load Filter:</label>
+            <select id="roster-filter-status"
+                    onchange="updateRosterFilter('loadFilter', this.value)"
+                    class="h-8 px-2.5 rounded-md text-xs font-semibold bg-slate-50 border border-slate-300 text-slate-800 cursor-pointer">
+              <option value="ALL">All Faculty</option>
+              <option value="OVERLOAD">Overload (&gt;18 hrs)</option>
+              <option value="REGULAR">Regular Load (12–18 hrs)</option>
+              <option value="PART_TIME">Part-Time / Underload (&lt;12 hrs)</option>
+              <option value="STREAK">3+ Consecutive Period Streak</option>
+              <option value="ZERO_LOAD">Incomplete / 0 Academic Classes</option>
+            </select>
+
+            <label for="roster-sort-by" class="text-xs text-slate-500 font-medium ml-1">Sort By:</label>
+            <select id="roster-sort-by"
+                    onchange="updateRosterFilter('sortBy', this.value)"
+                    class="h-8 px-2.5 rounded-md text-xs font-semibold bg-slate-50 border border-slate-300 text-slate-800 cursor-pointer">
+              <option value="NAME_ASC">Name (A–Z)</option>
+              <option value="HOURS_DESC">Contact Hours (High → Low)</option>
+              <option value="HOURS_ASC">Contact Hours (Low → High)</option>
+              <option value="STREAK_DESC">Longest Teaching Streak</option>
+              <option value="STATUS">Employment Status</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -1132,40 +1235,85 @@
   <!-- Batch Print Container (Form FLR-002 Slips - Visible Only During Batch Print) -->
   <div id="batch-print-container" class="hidden"></div>
 
-  <!-- Upload Modal -->
+  <!-- Upload & Staged Validation Preview Modal -->
   <div id="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 hidden">
-    <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 border border-slate-200">
-      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full p-5 sm:p-6 border border-slate-200 max-h-[92vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200 shrink-0">
         <div class="flex items-center gap-2">
           <i data-lucide="file-spreadsheet" class="w-4 h-4 text-blue-700"></i>
-          <h3 id="upload-modal-title" class="font-semibold text-slate-900 text-sm">Import Schedule Workbook</h3>
+          <div>
+            <h3 id="upload-modal-title" class="font-semibold text-slate-900 text-sm">Import &amp; Validate Schedule Workbook</h3>
+            <p class="text-[11px] text-slate-500">Preview extracted timetables, check conflicts, and confirm before replacing current data</p>
+          </div>
         </div>
         <button id="close-upload-btn" type="button" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" aria-label="Close import modal">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
 
-      <div class="mt-4">
-        <p class="text-xs text-slate-600 mb-3 leading-relaxed">
-          Select a faculty timetable workbook (<code class="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800">.xlsx</code>, <code class="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800">.xls</code>, or <code class="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800">.csv</code>). The parser extracts Form FLR-001 summaries and individual faculty schedules.
-        </p>
+      <div class="mt-4 overflow-y-auto pr-1 flex-1 space-y-4">
+        <!-- Step 1: File Drop Zone -->
+        <div id="upload-step-select">
+          <p class="text-xs text-slate-600 mb-3 leading-relaxed">
+            Select a faculty timetable workbook (<code class="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800">.xlsx</code>, <code class="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800">.xls</code>, or <code class="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800">.csv</code>). The parser extracts Form FLR-001 summaries, multi-sheet or stacked Form FLR-002 schedules, and exported schedule CSVs.
+          </p>
 
-        <div id="drop-zone" class="border-2 border-dashed border-slate-300 hover:border-blue-600 rounded-lg p-8 text-center bg-slate-50 cursor-pointer transition-colors">
-          <i data-lucide="upload-cloud" class="w-8 h-8 text-slate-400 mx-auto mb-2"></i>
-          <p class="text-xs font-semibold text-slate-800">Drag &amp; drop Excel or CSV file here</p>
-          <p class="text-xs text-slate-500 mt-1">or click to browse your computer</p>
-          <input type="file" id="excel-file-input" accept=".xlsx,.xls,.csv" class="hidden">
+          <div id="drop-zone" class="border-2 border-dashed border-slate-300 hover:border-blue-600 rounded-lg p-7 text-center bg-slate-50 cursor-pointer transition-colors">
+            <i data-lucide="upload-cloud" class="w-8 h-8 text-slate-400 mx-auto mb-2"></i>
+            <p class="text-xs font-semibold text-slate-800">Drag &amp; drop Excel or CSV file here</p>
+            <p class="text-xs text-slate-500 mt-1">or click to browse your computer</p>
+            <input type="file" id="excel-file-input" accept=".xlsx,.xls,.csv" class="hidden">
+          </div>
         </div>
 
-        <div id="upload-status" class="mt-3 text-xs font-medium text-center hidden"></div>
+        <div id="upload-status" class="text-xs font-medium text-center hidden"></div>
+
+        <!-- Step 2: Validation & Preview Stage (Populated dynamically before confirming import) -->
+        <div id="upload-preview-container" class="hidden space-y-3"></div>
       </div>
 
-      <div class="mt-5 flex justify-end gap-2 pt-3 border-t border-slate-200">
-        <button type="button" onclick="document.getElementById('upload-modal').classList.add('hidden')" class="h-8 px-3.5 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-300 transition-colors cursor-pointer">
-          Cancel
+      <div class="mt-5 flex items-center justify-between gap-2 pt-3 border-t border-slate-200 shrink-0">
+        <button id="upload-choose-another-btn" type="button" onclick="resetUploadModalPreview()" class="hidden h-8 px-3 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-300 transition-colors cursor-pointer">
+          Choose Different File
         </button>
-        <button type="button" onclick="document.getElementById('excel-file-input').click()" class="h-8 px-4 rounded-md text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white transition-colors cursor-pointer">
-          Select File
+        <div class="flex items-center gap-2 ml-auto">
+          <button type="button" onclick="cancelUploadModal()" class="h-8 px-3.5 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-300 transition-colors cursor-pointer">
+            Cancel
+          </button>
+          <button id="upload-select-file-btn" type="button" onclick="document.getElementById('excel-file-input').click()" class="h-8 px-4 rounded-md text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white transition-colors cursor-pointer">
+            Select File
+          </button>
+          <button id="upload-confirm-apply-btn" type="button" onclick="confirmPendingScheduleImport()" class="hidden h-8 px-4 rounded-md text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+            <i data-lucide="check-circle-2" class="w-3.5 h-3.5" aria-hidden="true"></i>
+            <span>Confirm &amp; Apply Schedule</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Schedule Change History & Version Restore Modal -->
+  <div id="history-modal" role="dialog" aria-modal="true" aria-labelledby="history-modal-title" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full p-5 sm:p-6 border border-slate-200 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <span class="w-7 h-7 rounded-md bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center">
+            <i data-lucide="history" class="w-4 h-4" aria-hidden="true"></i>
+          </span>
+          <div>
+            <h3 id="history-modal-title" class="font-semibold text-slate-900 text-sm">Schedule Change History &amp; Snapshots</h3>
+            <p class="text-[11px] text-slate-500">Audit trail of schedule imports, room reassignments, and restorable versions</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeScheduleHistoryModal()" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" aria-label="Close schedule history modal">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div id="history-modal-body" class="mt-4 overflow-y-auto space-y-3 pr-1 flex-1"></div>
+      <div class="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
+        <span>Snapshots are stored locally in your browser so you can safely roll back changes.</span>
+        <button type="button" onclick="closeScheduleHistoryModal()" class="h-8 px-3.5 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-300 transition-colors cursor-pointer">
+          Close
         </button>
       </div>
     </div>
