@@ -7,7 +7,7 @@
  *  3. Tabular CSV schedule exports (re-importing exported CEA_Schedule_Export_*.csv files)
  */
 
-const KNOWN_ROOMS_REGEX = /(BGANNEX\s*\d+[A-Z]?|BGANNE\s*\d+[A-Z]?|ALLIED\s*\d+[A-Z]?|SAL\s*\d+[A-Z]?|GLEC\s*\d+[A-Z]?|GLE\s*\d+[A-Z]?|GLAB\s*\d+[A-Z]?|PHYSLAB\s*\d+[A-Z]?|ACAD\s*\d+[A-Z]?|LINK\s*\d+[A-Z]?|RTL\s*\d+[A-Z]?|ENGG\s*\d+[A-Z]?|CEA\s*\d+[A-Z]?|AVR\s*\d*|GYM\s*\d*|TBA)/i;
+const KNOWN_ROOMS_REGEX = /\b(BGANNEX\s*\d+[A-Z]?|BGANNE\s*\d+[A-Z]?|ALLIED\s*\d+[A-Z]?|SAL\s*\d+[A-Z]?|GLEC\s*\d+[A-Z]?|GLE\s*\d+[A-Z]?|GLAB\s*\d+[A-Z]?|PHYSLAB\s*\d+[A-Z]?|ACAD\s*\d+[A-Z]?|LINK\s*\d+[A-Z]?|RTL\s*\d+[A-Z]?|ENGG\s*\d+[A-Z]?|AVR\s*\d+|GYM\s*\d+|TBA)\b/i;
 
 const TIME_SLOTS_STANDARDIZED = [
   "07:30 - 09:00",
@@ -595,7 +595,9 @@ function parseFacultyBlockFromRows(rows, startRowIdx, endRowIdx, fallbackSheetNa
       rowJoined.includes("IMPORTANT") ||
       rowJoined.includes("SUBMITTED BY") ||
       rowJoined.includes("CONFORME") ||
-      rowJoined.includes("INDIVIDUAL FACULTY TEACHING LOAD")
+      rowJoined.includes("INDIVIDUAL FACULTY TEACHING LOAD") ||
+      rowJoined.includes("DEPARTMENT") ||
+      rowJoined.includes("COLLEGE")
     ) {
       break;
     }
