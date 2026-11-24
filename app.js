@@ -84,11 +84,17 @@ function annotateSessionPeriods(data) {
     data.instructors.forEach(inst => {
       let seenAfterMorning = false;
       (inst.sessions || []).forEach(s => {
-        let pIdx = 0;
-        if (s.timeSlot === '07:30 - 09:00') {
-          pIdx = seenAfterMorning ? 8 : 0;
-        } else if (slotToIndexMap[s.timeSlot] !== undefined) {
-          pIdx = slotToIndexMap[s.timeSlot];
+        let pIdx = typeof s._periodIdx === 'number' && s._periodIdx >= 0 && s._periodIdx <= 8 ? s._periodIdx : -1;
+        if (pIdx === -1) {
+          if (s.timeSlot === '07:30 - 09:00') {
+            pIdx = seenAfterMorning ? 8 : 0;
+          } else if (slotToIndexMap[s.timeSlot] !== undefined) {
+            pIdx = slotToIndexMap[s.timeSlot];
+            seenAfterMorning = true;
+          } else {
+            pIdx = 0;
+          }
+        } else if (pIdx >= 1 && pIdx <= 7) {
           seenAfterMorning = true;
         }
         s._periodIdx = pIdx;
@@ -108,11 +114,17 @@ function annotateSessionPeriods(data) {
     data.sessions.forEach(s => {
       const sig = `${s.instructor}|${s.day}|${s.timeSlot}|${s.subject}|${s.section}|${s.room}`;
       const queue = signatureQueues.get(sig);
-      let pIdx = 0;
-      if (queue && queue.length > 0) {
-        pIdx = queue.shift();
-      } else if (slotToIndexMap[s.timeSlot] !== undefined) {
-        pIdx = slotToIndexMap[s.timeSlot];
+      let pIdx = typeof s._periodIdx === 'number' && s._periodIdx >= 0 && s._periodIdx <= 8 ? s._periodIdx : -1;
+      if (pIdx === -1) {
+        if (queue && queue.length > 0) {
+          pIdx = queue.shift();
+        } else if (slotToIndexMap[s.timeSlot] !== undefined) {
+          pIdx = slotToIndexMap[s.timeSlot];
+        } else {
+          pIdx = 0;
+        }
+      } else if (queue && queue.length > 0) {
+        queue.shift();
       }
       s._periodIdx = pIdx;
       s._periodLabel = PERIOD_DEFINITIONS[pIdx].shortLabel;
@@ -145,7 +157,9 @@ function getInstructorColor(name) {
 // Application State
 const state = {
   data: null,
-  activeTab: 'instructor', // 'instructor', 'master', 'rooms', 'sections', 'roster'
+  pendingImport: null, // Holds parsed workbook data & filename during preview stage before user confirmation
+  history: [],         // Schedule change history snapshots
+  activeTab: 'instructor', // 'overview', 'instructor', 'master', 'rooms', 'sections', 'roster'
   selectedRoom: '',
   selectedInstructor: '',
   selectedSection: '',
@@ -153,11 +167,25 @@ const state = {
   instructorDayFilter: 'ALL',
   roomDayFilter: 'ALL',
   sectionDayFilter: 'ALL',
+  instructorViewMode: 'timetable', // 'timetable' or 'availability'
+  facultyAvailabilityFilter: {
+    day: 'MONDAY',
+    periodIndex: 0,
+    statusFilter: 'ALL', // 'ALL', 'AVAILABLE', 'IN_CLASS', 'ON_DUTY'
+    employmentFilter: 'ALL', // 'ALL', 'FULL_TIME', 'PART_TIME'
+    search: ''
+  },
   roomViewMode: 'matrix', // 'matrix' or 'vacant'
   vacantFilter: {
     day: 'MONDAY',
     periodIndex: 0,
-    building: 'ALL'
+    building: 'ALL',
+    occupancyFilter: 'ALL' // 'ALL', 'VACANT', 'OCCUPIED'
+  },
+  rosterFilter: {
+    search: '',
+    loadFilter: 'ALL',
+    sortBy: 'NAME_ASC'
   },
   simulatedTime: {
     enabled: false,
@@ -182,14 +210,45 @@ const state = {
   }
 };
 
+// Safe Storage Helpers (Resilient when localStorage is unavailable or quota is exceeded)
+function safeStorageGet(key) {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function safeStorageSet(key, val) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, val);
+      return true;
+    }
+  } catch (e) {
+    console.warn(`LocalStorage write failed for ${key}:`, e);
+  }
+  return false;
+}
+
+function safeStorageRemove(key) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+  } catch (e) {}
+}
+
 // Initialize app on DOM ready
-document.addEventListener('DOMContentLoaded', () => {
-  initTheme();
-  initIcons();
-  loadInitialData();
-  setupEventListeners();
-  initLiveClock();
-});
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    initIcons();
+    loadInitialData();
+    setupEventListeners();
+    initLiveClock();
+  });
+}
 
 function initTheme() {
   const isDark = document.documentElement.classList.contains('dark');
@@ -236,7 +295,8 @@ function initIcons(rootElement) {
 
 // Load cached data or fall back to preloaded sample
 function loadInitialData() {
-  const cached = localStorage.getItem('cea_schedule_data');
+  loadScheduleHistory();
+  const cached = safeStorageGet('cea_schedule_data');
   if (cached) {
     try {
       state.data = JSON.parse(cached);
@@ -258,6 +318,186 @@ function loadInitialData() {
   }
 }
 
+/* =========================================================================
+   SCHEDULE CHANGE HISTORY & VERSION SNAPSHOTS
+   ========================================================================= */
+const MAX_HISTORY_ENTRIES = 10;
+
+function loadScheduleHistory() {
+  const raw = safeStorageGet('cea_schedule_history');
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        state.history = parsed;
+      }
+    } catch (e) {
+      state.history = [];
+    }
+  }
+  updateHistoryBadgeUI();
+}
+
+function saveScheduleHistory() {
+  while (state.history.length > MAX_HISTORY_ENTRIES) {
+    state.history.pop();
+  }
+  if (!safeStorageSet('cea_schedule_history', JSON.stringify(state.history))) {
+    // If quota exceeded, trim older snapshots and retry
+    while (state.history.length > 3) {
+      state.history.pop();
+      if (safeStorageSet('cea_schedule_history', JSON.stringify(state.history))) break;
+    }
+  }
+  updateHistoryBadgeUI();
+}
+
+function recordScheduleHistoryEntry({ actionType, title, summary, source, previousData, updatedData }) {
+  const prevClone = previousData ? JSON.parse(JSON.stringify(previousData)) : null;
+  // Strip computed diagnostics to keep snapshot lean in localStorage
+  if (prevClone && prevClone.diagnostics) delete prevClone.diagnostics;
+
+  const entry = {
+    id: `hist-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    timestamp: new Date().toISOString(),
+    actionType: actionType || 'UPDATE', // 'IMPORT', 'REASSIGN', 'RESET', 'RESTORE', 'ASSIGN_ROOM'
+    title: title || 'Schedule Updated',
+    summary: summary || '',
+    source: source || 'System',
+    metrics: {
+      instructorsCount: updatedData && Array.isArray(updatedData.instructors) ? updatedData.instructors.length : 0,
+      sessionsCount: updatedData && Array.isArray(updatedData.sessions) ? updatedData.sessions.filter(s => !s.isDuty).length : 0,
+      roomsCount: updatedData && Array.isArray(updatedData.rooms) ? updatedData.rooms.length : 0,
+      conflictsCount: updatedData && Array.isArray(updatedData.conflicts) ? updatedData.conflicts.length : 0
+    },
+    previousSnapshot: prevClone
+  };
+
+  state.history.unshift(entry);
+  saveScheduleHistory();
+  return entry;
+}
+
+function updateHistoryBadgeUI() {
+  if (typeof document === 'undefined') return;
+  const badge = document.getElementById('history-count-badge');
+  if (!badge) return;
+  const count = Array.isArray(state.history) ? state.history.length : 0;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+window.openScheduleHistoryModal = function() {
+  const modal = document.getElementById('history-modal');
+  if (!modal) return;
+  renderScheduleHistoryModal();
+  modal.classList.remove('hidden');
+  initIcons();
+};
+
+window.closeScheduleHistoryModal = function() {
+  const modal = document.getElementById('history-modal');
+  if (modal) modal.classList.add('hidden');
+};
+
+window.restoreScheduleHistoryEntry = function(entryId) {
+  const entry = (state.history || []).find(h => h.id === entryId);
+  if (!entry || !entry.previousSnapshot) {
+    showNotification('Snapshot data is not available for this entry.', 'info');
+    return;
+  }
+
+  const prevDataBeforeRestore = state.data ? JSON.parse(JSON.stringify(state.data)) : null;
+  const restoredData = JSON.parse(JSON.stringify(entry.previousSnapshot));
+
+  annotateSessionPeriods(restoredData);
+  recalculateConflicts(restoredData);
+
+  state.data = restoredData;
+  safeStorageSet('cea_schedule_data', JSON.stringify(state.data));
+
+  recordScheduleHistoryEntry({
+    actionType: 'RESTORE',
+    title: `Restored Snapshot prior to "${entry.title}"`,
+    summary: `Reverted schedule to state before ${new Date(entry.timestamp).toLocaleString()}`,
+    source: 'History Restore',
+    previousData: prevDataBeforeRestore,
+    updatedData: state.data
+  });
+
+  setupDefaults();
+  renderAll();
+  renderScheduleHistoryModal();
+  showNotification('Restored previous schedule version', 'success');
+};
+
+function renderScheduleHistoryModal() {
+  const body = document.getElementById('history-modal-body');
+  if (!body) return;
+
+  if (!state.history || state.history.length === 0) {
+    body.innerHTML = `
+      <div class="p-8 text-center rounded-lg border border-slate-200 bg-slate-50/60">
+        <div class="w-9 h-9 rounded-full bg-white border border-slate-200 text-slate-400 flex items-center justify-center mx-auto mb-2">
+          <i data-lucide="history" class="w-4 h-4" aria-hidden="true"></i>
+        </div>
+        <div class="text-sm font-semibold text-slate-800">No schedule modifications recorded yet</div>
+        <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+          Whenever you import an Excel/CSV workbook, reassign a room to resolve a conflict, or reset data, a snapshot will be saved here so you can review or roll back changes.
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  const badgeColors = {
+    IMPORT: 'bg-blue-50 text-blue-700 border-blue-200',
+    REASSIGN: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    ASSIGN_ROOM: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    RESET: 'bg-amber-50 text-amber-800 border-amber-200',
+    RESTORE: 'bg-purple-50 text-purple-700 border-purple-200'
+  };
+
+  body.innerHTML = state.history.map((h) => {
+    const dt = new Date(h.timestamp);
+    const formattedDate = isNaN(dt.getTime()) ? h.timestamp : dt.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    const badgeClass = badgeColors[h.actionType] || 'bg-slate-100 text-slate-700 border-slate-200';
+    const m = h.metrics || {};
+
+    return `
+      <div class="p-3.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 transition-colors shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="min-w-0 space-y-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${badgeClass}">${escapeHtml(h.actionType)}</span>
+            <span class="text-xs sm:text-sm font-semibold text-slate-900">${escapeHtml(h.title)}</span>
+          </div>
+          <p class="text-xs text-slate-600">${escapeHtml(h.summary)}</p>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 font-mono">
+            <span>${escapeHtml(formattedDate)}</span>
+            <span>•</span>
+            <span>Source: ${escapeHtml(h.source || 'User')}</span>
+            ${m.instructorsCount ? `<span>• ${m.instructorsCount} faculty, ${m.sessionsCount} classes, ${m.conflictsCount} conflicts</span>` : ''}
+          </div>
+        </div>
+        ${h.previousSnapshot ? `
+          <button type="button"
+                  onclick="restoreScheduleHistoryEntry('${escapeHtmlAttr(h.id)}')"
+                  class="h-8 px-3 rounded-md text-xs font-semibold bg-slate-100 hover:bg-blue-700 text-slate-700 hover:text-white border border-slate-200 hover:border-blue-700 inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5" aria-hidden="true"></i>
+            <span>Restore Prior State</span>
+          </button>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
 function getAllSections() {
   if (!state.data || !Array.isArray(state.data.sessions)) return [];
   const secSet = new Set();
@@ -271,6 +511,10 @@ function getAllSections() {
 
 function recalculateConflicts(data) {
   if (!data || !Array.isArray(data.sessions)) return;
+  if (typeof window.analyzeScheduleConflictsAndHealth === 'function') {
+    window.analyzeScheduleConflictsAndHealth(data);
+    return;
+  }
   const slotMap = new Map();
   const roomSet = new Set(Array.isArray(data.rooms) ? data.rooms : []);
 
@@ -321,6 +565,8 @@ function setupDefaults() {
   if (snap && snap.isAcademicDay) {
     state.vacantFilter.day = snap.dayOfWeek;
     state.vacantFilter.periodIndex = snap.activePeriod ? snap.activePeriod.index : 0;
+    state.facultyAvailabilityFilter.day = snap.dayOfWeek;
+    state.facultyAvailabilityFilter.periodIndex = snap.activePeriod ? snap.activePeriod.index : 0;
   }
 }
 
@@ -508,11 +754,15 @@ function setupEventListeners() {
         closeAccessibleModal(resetConfirmModal);
       }
       if (uploadModal && !uploadModal.classList.contains('hidden')) {
-        closeAccessibleModal(uploadModal);
+        cancelUploadModal();
       }
       const conflictModal = document.getElementById('conflict-resolver-modal');
       if (conflictModal && !conflictModal.classList.contains('hidden')) {
         closeConflictResolverModal();
+      }
+      const historyModal = document.getElementById('history-modal');
+      if (historyModal && !historyModal.classList.contains('hidden')) {
+        closeScheduleHistoryModal();
       }
     }
   });
@@ -637,10 +887,21 @@ function setupEventListeners() {
 }
 
 function performResetToSampleData() {
-  localStorage.removeItem('cea_schedule_data');
+  const previousData = state.data ? JSON.parse(JSON.stringify(state.data)) : null;
+  safeStorageRemove('cea_schedule_data');
   state.data = JSON.parse(JSON.stringify(window.SAMPLE_SCHEDULE_DATA));
   annotateSessionPeriods(state.data);
   recalculateConflicts(state.data);
+
+  recordScheduleHistoryEntry({
+    actionType: 'RESET',
+    title: 'Reset to Default Sample Dataset',
+    summary: 'Discarded custom changes and restored the default CEA semester dataset.',
+    source: 'Default Dataset',
+    previousData,
+    updatedData: state.data
+  });
+
   setupDefaults();
   renderAll();
   showNotification('Restored default CEA sample schedule dataset', 'success');
@@ -679,7 +940,7 @@ function restoreStateFromUrl() {
       const matchSec = allSecs.find(s => s.toLowerCase() === section.toLowerCase());
       if (matchSec) state.selectedSection = matchSec;
     }
-    if (tab && ['instructor', 'master', 'rooms', 'sections', 'roster'].includes(tab)) {
+    if (tab && ['overview', 'instructor', 'master', 'rooms', 'sections', 'roster'].includes(tab)) {
       setTimeout(() => switchTab(tab), 0);
     }
   } catch (e) {}
@@ -724,7 +985,11 @@ function switchTab(tabName) {
   });
 
   // Re-render corresponding tab
-  if (tabName === 'rooms') renderRoomOccupancy();
+  if (tabName === 'overview') renderOverviewDashboard();
+  if (tabName === 'rooms') {
+    if (state.roomViewMode === 'vacant') renderVacantRoomFinder();
+    else renderRoomOccupancy();
+  }
   if (tabName === 'master') renderMasterSchedule();
   if (tabName === 'sections') renderSectionSchedule();
   if (tabName === 'instructor') {
@@ -733,7 +998,8 @@ function switchTab(tabName) {
       searchInput.value = state.selectedInstructor;
       updateClearButtonVisibility();
     }
-    renderInstructorSchedule();
+    if (state.instructorViewMode === 'availability') renderFacultyAvailabilityFinder();
+    else renderInstructorSchedule();
   }
   if (tabName === 'roster') renderRosterView();
 
@@ -746,12 +1012,16 @@ window.switchTab = switchTab;
 function renderAll() {
   renderStatCards();
   populateDropdowns();
+  renderOverviewDashboard();
   renderRoomOccupancy();
+  if (state.roomViewMode === 'vacant') renderVacantRoomFinder();
   renderMasterSchedule();
   renderSectionSchedule();
   renderInstructorSchedule();
+  if (state.instructorViewMode === 'availability') renderFacultyAvailabilityFinder();
   renderRosterView();
   updateLiveClockUI(true);
+  updateHistoryBadgeUI();
   initIcons();
 }
 
@@ -802,7 +1072,7 @@ function populateDropdowns() {
   const masterRoomSelect = document.getElementById('filter-master-room');
   if (masterRoomSelect) {
     masterRoomSelect.innerHTML = `<option value="ALL">All Rooms (${state.data.rooms.length})</option>` +
-      state.data.rooms.map(r => `<option value="${r}">${r}</option>`).join('');
+      state.data.rooms.map(r => `<option value="${escapeHtmlAttr(r)}">${escapeHtml(r)}</option>`).join('');
   }
 
   // Render the interactive room pills
@@ -821,7 +1091,7 @@ function populateDropdowns() {
   const masterInstSelect = document.getElementById('filter-master-instructor');
   if (masterInstSelect) {
     masterInstSelect.innerHTML = `<option value="ALL">All Faculty (${state.data.instructors.length})</option>` +
-      state.data.instructors.map(i => `<option value="${i.name}">${i.name}</option>`).join('');
+      state.data.instructors.map(i => `<option value="${escapeHtmlAttr(i.name)}">${escapeHtml(i.name)}</option>`).join('');
   }
 
   // Student Sections Dropdown
@@ -830,7 +1100,7 @@ function populateDropdowns() {
   if (sectionSelect) {
     sectionSelect.innerHTML = allSections.map(sec => {
       const count = state.data.sessions.filter(s => !s.isDuty && s.section === sec).length;
-      return `<option value="${escapeHtmlAttr(sec)}" ${sec === state.selectedSection ? 'selected' : ''}>Section ${sec} (${count} classes/wk)</option>`;
+      return `<option value="${escapeHtmlAttr(sec)}" ${sec === state.selectedSection ? 'selected' : ''}>Section ${escapeHtml(sec)} (${count} classes/wk)</option>`;
     }).join('');
   }
 }
@@ -849,8 +1119,22 @@ function updateClearButtonVisibility() {
 }
 
 function escapeHtmlAttr(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeHtml(str) {
+  return escapeHtmlAttr(str);
+}
+
+function sanitizeCsvCell(val) {
+  if (val === null || val === undefined) return '""';
+  let s = String(val).replace(/\r?\n/g, ' ').trim();
+  // Prevent CSV formula injection when opened in Excel/Sheets
+  if (/^[=+\-@\t\r]/.test(s) && s !== '-') {
+    s = "'" + s;
+  }
+  return `"${s.replace(/"/g, '""')}"`;
 }
 
 function setupInstructorAutocomplete() {
@@ -1073,15 +1357,20 @@ function renderInstructorSuggestions(query = '') {
 }
 
 function highlightMatchText(text, tokens) {
-  if (!tokens || tokens.length === 0 || !text) return text;
-  const escapedTokens = tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const safeText = escapeHtml(text || '');
+  if (!tokens || tokens.length === 0 || !safeText) return safeText;
+  const escapedTokens = tokens.map(t => escapeHtml(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).filter(Boolean);
+  if (escapedTokens.length === 0) return safeText;
   const regex = new RegExp(`(${escapedTokens.join('|')})`, 'gi');
-  return text.replace(regex, '<mark class="bg-amber-100 text-slate-900 rounded-xs px-0.5">$1</mark>');
+  return safeText.replace(regex, '<mark class="bg-amber-100 text-slate-900 rounded-xs px-0.5">$1</mark>');
 }
 
 window.selectInstructorAutocomplete = function(name) {
   if (!name) return;
   state.selectedInstructor = name;
+  if (state.instructorViewMode !== 'timetable') {
+    setInstructorViewMode('timetable');
+  }
   const searchInput = document.getElementById('instructor-search-input');
   if (searchInput) {
     searchInput.value = name;
@@ -1104,6 +1393,726 @@ window.selectInstructorAutocomplete = function(name) {
   syncStateToUrl();
   initIcons();
 };
+
+/* =========================================================================
+   TAB 0: OVERVIEW DASHBOARD (AT-A-GLANCE ACADEMIC SUMMARY & HEALTH)
+   ========================================================================= */
+window.jumpToAvailabilityFinder = function(day, periodIndex) {
+  if (day) state.facultyAvailabilityFilter.day = day;
+  if (typeof periodIndex === 'number') state.facultyAvailabilityFilter.periodIndex = periodIndex;
+  switchTab('instructor');
+  setInstructorViewMode('availability');
+};
+
+window.jumpToRoomAvailabilityFinder = function(day, periodIndex, building = 'ALL') {
+  if (day) state.vacantFilter.day = day;
+  if (typeof periodIndex === 'number') state.vacantFilter.periodIndex = periodIndex;
+  if (building) state.vacantFilter.building = building;
+  switchTab('rooms');
+  setRoomViewMode('vacant');
+};
+
+function renderOverviewDashboard() {
+  const container = document.getElementById('overview-dashboard-container');
+  if (!container || !state.data) return;
+
+  const instructors = state.data.instructors || [];
+  const allSessions = state.data.sessions || [];
+  const academicSessions = allSessions.filter(s => !s.isDuty);
+  const dutySessions = allSessions.filter(s => s.isDuty);
+  const rooms = (state.data.rooms || []).filter(r => r && r !== 'OFFICE / DEPT' && r !== 'TBA');
+  const sections = getAllSections();
+
+  recalculateConflicts(state.data);
+  const diag = state.data.diagnostics || {
+    roomConflicts: state.data.conflicts || [],
+    instructorConflicts: [],
+    sectionConflicts: [],
+    unassignedRoomSessions: academicSessions.filter(s => !s.room || s.room === 'TBA'),
+    missingSectionSessions: academicSessions.filter(s => !s.section || s.section === '-'),
+    zeroLoadInstructors: instructors.filter(i => (i.sessions || []).filter(s => !s.isDuty).length === 0),
+    duplicateSessions: []
+  };
+
+  const snapshot = getManilaTimeSnapshot();
+  const targetDay = snapshot.isAcademicDay ? snapshot.dayOfWeek : 'MONDAY';
+  const targetPeriodIdx = snapshot.activePeriod ? snapshot.activePeriod.index : 0;
+  const targetPeriodDef = PERIOD_DEFINITIONS[targetPeriodIdx] || PERIOD_DEFINITIONS[0];
+
+  const vacantNowList = getVacantRoomsForSlot(targetDay, targetPeriodIdx, 'ALL');
+  const availableFacultyNow = getFacultyAvailabilityForSlot(targetDay, targetPeriodIdx).filter(f => f.statusCode === 'AVAILABLE');
+
+  // Room utilization by building
+  const buildingGroups = ['ALLIED', 'BGANNEX', 'SAL', 'GLEC', 'OTHER'];
+  const buildingStats = buildingGroups.map(code => {
+    const bRooms = rooms.filter(r => getRoomBuildingTag(r).code === code);
+    const totalWeeklySlots = bRooms.length * 54; // 6 days * 9 periods
+    const usedSlots = academicSessions.filter(s => bRooms.includes(s.room)).length;
+    const utilPct = totalWeeklySlots > 0 ? Math.min(100, Math.round((usedSlots / totalWeeklySlots) * 100)) : 0;
+    const labelMap = { ALLIED: 'Allied Building', BGANNEX: 'BG Annex', SAL: 'SAL Building', GLEC: 'GLEC Building', OTHER: 'Other Facilities' };
+    return {
+      code,
+      label: labelMap[code] || code,
+      roomCount: bRooms.length,
+      usedSlots,
+      totalWeeklySlots,
+      utilPct
+    };
+  }).filter(b => b.roomCount > 0);
+
+  // Per-day session counts (Mon-Sat)
+  const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+  const dayCounts = days.map(d => ({
+    day: d,
+    label: DAY_TITLE_LABELS[d],
+    short: DAY_SHORT_LABELS[d],
+    classes: academicSessions.filter(s => s.day === d).length,
+    duties: dutySessions.filter(s => s.day === d).length,
+    isToday: snapshot.isAcademicDay && snapshot.dayOfWeek === d
+  }));
+
+  const incompleteCount =
+    diag.unassignedRoomSessions.length +
+    diag.zeroLoadInstructors.length +
+    diag.missingSectionSessions.length +
+    diag.duplicateSessions.length;
+
+  const totalConflictsCount = diag.roomConflicts.length + diag.instructorConflicts.length;
+
+  container.innerHTML = `
+    <!-- 1. Top KPI Summary Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-3">
+      <div role="button" tabindex="0" onclick="switchTab('instructor')" class="bg-white p-3.5 rounded-lg border border-slate-200 hover:border-blue-300 shadow-2xs transition-colors cursor-pointer flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs text-slate-500 font-medium">
+          <span>Total Faculty</span>
+          <i data-lucide="users" class="w-4 h-4 text-blue-600" aria-hidden="true"></i>
+        </div>
+        <div class="mt-2">
+          <div class="text-xl sm:text-2xl font-bold text-slate-900 font-mono tabular-nums">${instructors.length}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">${availableFacultyNow.length} free on ${DAY_SHORT_LABELS[targetDay]} ${targetPeriodDef.code}</div>
+        </div>
+      </div>
+
+      <div role="button" tabindex="0" onclick="switchTab('master')" class="bg-white p-3.5 rounded-lg border border-slate-200 hover:border-blue-300 shadow-2xs transition-colors cursor-pointer flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs text-slate-500 font-medium">
+          <span>Scheduled Classes</span>
+          <i data-lucide="book-open" class="w-4 h-4 text-indigo-600" aria-hidden="true"></i>
+        </div>
+        <div class="mt-2">
+          <div class="text-xl sm:text-2xl font-bold text-slate-900 font-mono tabular-nums">${academicSessions.length}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">${sections.length} student sections • ${dutySessions.length} duty slots</div>
+        </div>
+      </div>
+
+      <div role="button" tabindex="0" onclick="switchTab('rooms')" class="bg-white p-3.5 rounded-lg border border-slate-200 hover:border-blue-300 shadow-2xs transition-colors cursor-pointer flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs text-slate-500 font-medium">
+          <span>Active Classrooms</span>
+          <i data-lucide="door-open" class="w-4 h-4 text-teal-600" aria-hidden="true"></i>
+        </div>
+        <div class="mt-2">
+          <div class="text-xl sm:text-2xl font-bold text-slate-900 font-mono tabular-nums">${rooms.length}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">Across ${buildingStats.length} academic buildings</div>
+        </div>
+      </div>
+
+      <div role="button" tabindex="0" onclick="jumpToRoomAvailabilityFinder('${targetDay}', ${targetPeriodIdx})" class="bg-white p-3.5 rounded-lg border border-slate-200 hover:border-emerald-300 shadow-2xs transition-colors cursor-pointer flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs text-slate-500 font-medium">
+          <span>Available Rooms (${targetPeriodDef.code})</span>
+          <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600" aria-hidden="true"></i>
+        </div>
+        <div class="mt-2">
+          <div class="text-xl sm:text-2xl font-bold text-emerald-700 font-mono tabular-nums">${vacantNowList.length} <span class="text-xs font-normal text-slate-400">/ ${rooms.length}</span></div>
+          <div class="text-[11px] text-emerald-700 font-medium mt-0.5">Vacant on ${DAY_SHORT_LABELS[targetDay]} • ${targetPeriodDef.shortLabel}</div>
+        </div>
+      </div>
+
+      <div role="button" tabindex="0" onclick="switchTab('rooms')" class="bg-white p-3.5 rounded-lg border ${totalConflictsCount > 0 ? 'border-red-300 bg-red-50/20' : 'border-slate-200'} shadow-2xs transition-colors cursor-pointer flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs ${totalConflictsCount > 0 ? 'text-red-700 font-semibold' : 'text-slate-500 font-medium'}">
+          <span>Schedule Conflicts</span>
+          <i data-lucide="alert-triangle" class="w-4 h-4 ${totalConflictsCount > 0 ? 'text-red-600' : 'text-emerald-600'}" aria-hidden="true"></i>
+        </div>
+        <div class="mt-2">
+          <div class="text-xl sm:text-2xl font-bold ${totalConflictsCount > 0 ? 'text-red-700' : 'text-emerald-700'} font-mono tabular-nums">${totalConflictsCount}</div>
+          <div class="text-[11px] ${totalConflictsCount > 0 ? 'text-red-700' : 'text-slate-500'} mt-0.5">${diag.roomConflicts.length} room • ${diag.instructorConflicts.length} faculty overlaps</div>
+        </div>
+      </div>
+
+      <div class="bg-white p-3.5 rounded-lg border ${incompleteCount > 0 ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200'} shadow-2xs flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs ${incompleteCount > 0 ? 'text-amber-800 font-semibold' : 'text-slate-500 font-medium'}">
+          <span>Incomplete / Alerts</span>
+          <i data-lucide="clipboard-alert" class="w-4 h-4 ${incompleteCount > 0 ? 'text-amber-600' : 'text-slate-400'}" aria-hidden="true"></i>
+        </div>
+        <div class="mt-2">
+          <div class="text-xl sm:text-2xl font-bold ${incompleteCount > 0 ? 'text-amber-800' : 'text-slate-900'} font-mono tabular-nums">${incompleteCount}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">${diag.unassignedRoomSessions.length} TBA room • ${diag.zeroLoadInstructors.length} zero-load</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Conflict Impact Analysis & Incomplete Schedule Detection -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <!-- Left 7 cols: Conflict Impact Analysis -->
+      <div class="lg:col-span-7 bg-white rounded-lg border border-slate-200 shadow-2xs p-4 flex flex-col justify-between space-y-3">
+        <div>
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold ${totalConflictsCount > 0 ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}">
+                  CONFLICT IMPACT ANALYSIS
+                </span>
+                <h3 class="text-sm font-bold text-slate-900">Room &amp; Faculty Overlap Diagnostics</h3>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">Identifies affected instructors, student blocks, overlapping rooms, and resolution actions</p>
+            </div>
+            ${diag.roomConflicts.length > 0 ? `
+              <button type="button" onclick="switchTab('rooms')" class="h-7 px-2.5 rounded text-xs font-medium bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors cursor-pointer">
+                View in Room Matrix →
+              </button>
+            ` : ''}
+          </div>
+
+          ${totalConflictsCount === 0 ? `
+            <div class="p-6 text-center rounded-lg border border-emerald-200 bg-emerald-50/50 mt-3">
+              <i data-lucide="check-circle-2" class="w-6 h-6 text-emerald-600 mx-auto mb-1.5" aria-hidden="true"></i>
+              <div class="text-xs font-semibold text-emerald-900">No Room or Faculty Scheduling Conflicts Detected</div>
+              <p class="text-[11px] text-emerald-700 mt-0.5">All ${academicSessions.length} academic classes are assigned to non-overlapping room and time slots.</p>
+            </div>
+          ` : `
+            <div class="mt-3 space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
+              ${diag.roomConflicts.map(c => {
+                const pDef = PERIOD_DEFINITIONS[c.periodIndex] || PERIOD_DEFINITIONS[0];
+                const vacantForSlot = getVacantRoomsForSlot(c.day, c.periodIndex, 'ALL');
+                return `
+                  <div class="p-3 rounded-lg border border-red-200 bg-red-50/50 space-y-2">
+                    <div class="flex flex-wrap items-start justify-between gap-2">
+                      <div class="flex items-center gap-2">
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-red-600 text-white">ROOM CLASH</span>
+                        <span class="font-mono text-xs font-bold text-slate-900">${escapeHtml(c.room)}</span>
+                        <span class="text-xs font-semibold text-slate-700">• ${DAY_TITLE_LABELS[c.day] || escapeHtml(c.day)} • ${pDef.code} (${pDef.shortLabel})</span>
+                      </div>
+                      <button type="button"
+                              onclick="openConflictResolverModal('${escapeHtmlAttr(c.room)}', '${escapeHtmlAttr(c.day)}', ${c.periodIndex})"
+                              class="h-7 px-2.5 rounded text-xs font-semibold bg-red-600 hover:bg-red-700 text-white inline-flex items-center gap-1 transition-colors cursor-pointer shrink-0">
+                        <i data-lucide="wrench" class="w-3 h-3" aria-hidden="true"></i>
+                        <span>Resolve (${vacantForSlot.length} vacant rooms)</span>
+                      </button>
+                    </div>
+                    <p class="text-xs text-slate-700 leading-relaxed">
+                      <strong>Impact:</strong> ${escapeHtml(c.explanation)}
+                    </p>
+                    <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span class="text-slate-500 font-medium">Affected Faculty:</span>
+                      ${(c.affectedInstructors || []).map(inst => `
+                        <button type="button" onclick="viewInstructor('${escapeHtmlAttr(inst)}')" class="px-2 py-0.5 rounded bg-white border border-red-200 text-slate-800 hover:text-blue-700 font-medium cursor-pointer">
+                          ${escapeHtml(inst)}
+                        </button>
+                      `).join('')}
+                    </div>
+                    <div class="text-[11px] text-emerald-800 bg-white/80 px-2.5 py-1.5 rounded border border-red-100">
+                      <strong>Recommended Resolution:</strong> Reassign one session to an available room in the same building (e.g., ${vacantForSlot.slice(0, 3).map(v => v.room).join(', ') || 'any vacant room'}).
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+
+              ${diag.instructorConflicts.map(ic => {
+                const pDef = PERIOD_DEFINITIONS[ic.periodIndex] || PERIOD_DEFINITIONS[0];
+                return `
+                  <div class="p-3 rounded-lg border border-amber-200 bg-amber-50/50 space-y-1.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div class="flex items-center gap-2">
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-600 text-white">FACULTY OVERLAP</span>
+                        <span class="text-xs font-bold text-slate-900">${escapeHtml(ic.instructor)}</span>
+                        <span class="text-xs font-mono text-slate-600">• ${DAY_TITLE_LABELS[ic.day] || escapeHtml(ic.day)} ${pDef.code}</span>
+                      </div>
+                      <button type="button" onclick="viewInstructor('${escapeHtmlAttr(ic.instructor)}')" class="h-7 px-2.5 rounded text-xs font-medium bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors cursor-pointer">
+                        Inspect Timetable →
+                      </button>
+                    </div>
+                    <p class="text-xs text-slate-700">${escapeHtml(ic.explanation)}</p>
+                    <div class="text-[11px] text-amber-900"><strong>Recommendation:</strong> ${escapeHtml(ic.resolutionHint)}</div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+      </div>
+
+      <!-- Right 5 cols: Incomplete Schedule Detection & Data Quality -->
+      <div class="lg:col-span-5 bg-white rounded-lg border border-slate-200 shadow-2xs p-4 flex flex-col justify-between space-y-3">
+        <div>
+          <div class="flex items-center justify-between gap-2 pb-3 border-b border-slate-200">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold ${incompleteCount > 0 ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'}">
+                  DATA INTEGRITY
+                </span>
+                <h3 class="text-sm font-bold text-slate-900">Incomplete Schedule Detection</h3>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">Flags unassigned rooms (TBA), missing sections, and zero-load faculty</p>
+            </div>
+          </div>
+
+          ${incompleteCount === 0 ? `
+            <div class="p-6 text-center rounded-lg border border-emerald-200 bg-emerald-50/50 mt-3">
+              <div class="text-xs font-semibold text-emerald-900">All Schedule Entries Are Complete</div>
+              <p class="text-[11px] text-emerald-700 mt-0.5">Every scheduled class has a valid room, course code, student section, and assigned instructor.</p>
+            </div>
+          ` : `
+            <div class="mt-3 space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
+              ${diag.unassignedRoomSessions.map((s, idx) => {
+                const pIdx = getSessionPeriodIndex(s);
+                const pDef = PERIOD_DEFINITIONS[pIdx] || PERIOD_DEFINITIONS[0];
+                const vacantList = getVacantRoomsForSlot(s.day, pIdx, 'ALL');
+                const selectId = `overview-tba-room-${idx}`;
+                return `
+                  <div class="p-3 rounded-lg border border-amber-200 bg-amber-50/40 space-y-2">
+                    <div class="flex items-start justify-between gap-2">
+                      <div>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-100 text-amber-900 border border-amber-300">MISSING ROOM (TBA)</span>
+                        <div class="text-xs font-bold text-slate-900 mt-1">${escapeHtml(s.subject)} (Sec ${escapeHtml(s.section)}) — ${escapeHtml(s.instructor)}</div>
+                        <div class="text-[11px] font-mono text-slate-600">${DAY_TITLE_LABELS[s.day] || escapeHtml(s.day)} • ${pDef.code} (${pDef.shortLabel})</div>
+                      </div>
+                    </div>
+                    ${vacantList.length > 0 ? `
+                      <div class="flex items-center gap-1.5 pt-1">
+                        <select id="${selectId}" aria-label="Assign room for ${escapeHtmlAttr(s.subject)}" class="h-7 px-2 rounded text-xs font-mono bg-white border border-slate-300 text-slate-900 flex-1 min-w-0 cursor-pointer">
+                          ${vacantList.map(v => `<option value="${escapeHtmlAttr(v.room)}">${escapeHtml(v.room)} (${escapeHtml(v.buildingLabel)} · Free ${v.freeHours}h)</option>`).join('')}
+                        </select>
+                        <button type="button"
+                                onclick="reassignSessionRoom('${escapeHtmlAttr(s.instructor)}', '${escapeHtmlAttr(s.day)}', ${pIdx}, '${escapeHtmlAttr(s.subject)}', '${escapeHtmlAttr(s.section)}', '${escapeHtmlAttr(s.room)}', document.getElementById('${selectId}').value)"
+                                class="h-7 px-2.5 rounded text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white transition-colors cursor-pointer shrink-0">
+                          Assign Room
+                        </button>
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              }).join('')}
+
+              ${diag.zeroLoadInstructors.map(inst => `
+                <div class="p-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+                  <div>
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-200 text-slate-800">NO ACADEMIC CLASSES</span>
+                    <div class="text-xs font-bold text-slate-900 mt-1">${escapeHtml(inst.name)}</div>
+                    <div class="text-[11px] text-slate-500">Status: ${escapeHtml(inst.status || 'Faculty')} • ${(inst.sessions || []).length} office duty periods</div>
+                  </div>
+                  <button type="button" onclick="viewInstructor('${escapeHtmlAttr(inst.name)}')" class="h-7 px-2.5 rounded text-xs font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer shrink-0">
+                    Inspect
+                  </button>
+                </div>
+              `).join('')}
+
+              ${diag.missingSectionSessions.map(s => {
+                const pDef = PERIOD_DEFINITIONS[getSessionPeriodIndex(s)] || PERIOD_DEFINITIONS[0];
+                return `
+                  <div class="p-2.5 rounded-lg border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2 text-xs">
+                    <div>
+                      <span class="font-semibold text-slate-900">${escapeHtml(s.subject)}</span>
+                      <span class="text-slate-500"> • Missing section code • ${escapeHtml(s.instructor.split(',')[0])} (${DAY_SHORT_LABELS[s.day]} ${pDef.code})</span>
+                    </div>
+                    <button type="button" onclick="viewInstructor('${escapeHtmlAttr(s.instructor)}')" class="text-blue-700 hover:underline font-medium shrink-0 cursor-pointer">View</button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Building Utilization, Daily Class Distribution & Recent Schedule Updates -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <!-- Building Utilization (4 cols) -->
+      <div class="lg:col-span-4 bg-white rounded-lg border border-slate-200 shadow-2xs p-4 space-y-3">
+        <div class="flex items-center justify-between pb-2.5 border-b border-slate-200">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Room Utilization by Building</h3>
+            <p class="text-xs text-slate-500">Weekly classroom occupancy across 54 periods/wk</p>
+          </div>
+          <button type="button" onclick="jumpToRoomAvailabilityFinder('${targetDay}', ${targetPeriodIdx})" class="text-xs font-medium text-blue-700 hover:underline cursor-pointer">
+            Find Room →
+          </button>
+        </div>
+        <div class="space-y-3">
+          ${buildingStats.map(b => `
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-xs">
+                <button type="button" onclick="jumpToRoomAvailabilityFinder('${targetDay}', ${targetPeriodIdx}, '${b.code}')" class="font-semibold text-slate-800 hover:text-blue-700 cursor-pointer">
+                  ${escapeHtml(b.label)} <span class="text-slate-400 font-normal">(${b.roomCount} rooms)</span>
+                </button>
+                <span class="font-mono font-semibold text-slate-900 tabular-nums">${b.utilPct}% <span class="text-slate-400 font-normal text-[11px]">(${b.usedSlots}/${b.totalWeeklySlots})</span></span>
+              </div>
+              <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200/80">
+                <div class="h-full rounded-full ${b.utilPct > 75 ? 'bg-amber-500' : 'bg-blue-600'}" style="width: ${b.utilPct}%"></div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Daily Schedule Distribution (4 cols) -->
+      <div class="lg:col-span-4 bg-white rounded-lg border border-slate-200 shadow-2xs p-4 space-y-3">
+        <div class="flex items-center justify-between pb-2.5 border-b border-slate-200">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Weekly Schedule Distribution</h3>
+            <p class="text-xs text-slate-500">Academic classes &amp; office duties per instructional day</p>
+          </div>
+          <button type="button" onclick="switchTab('master')" class="text-xs font-medium text-blue-700 hover:underline cursor-pointer">
+            Master Grid →
+          </button>
+        </div>
+        <div class="divide-y divide-slate-100">
+          ${dayCounts.map(d => `
+            <div class="py-2 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-semibold ${d.isToday ? 'text-blue-700' : 'text-slate-800'}">${d.label}</span>
+                ${d.isToday ? '<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-semibold bg-blue-700 text-white">TODAY</span>' : ''}
+              </div>
+              <div class="flex items-center gap-3 font-mono">
+                <span class="text-slate-900 font-semibold">${d.classes} classes</span>
+                <span class="text-slate-400 text-[11px]">${d.duties} duty</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Recent Schedule Changes & Quick Actions (4 cols) -->
+      <div class="lg:col-span-4 bg-white rounded-lg border border-slate-200 shadow-2xs p-4 flex flex-col justify-between space-y-3">
+        <div>
+          <div class="flex items-center justify-between pb-2.5 border-b border-slate-200">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Recent Schedule Activity</h3>
+              <p class="text-xs text-slate-500">Imports, conflict reassignments &amp; snapshots</p>
+            </div>
+            <button type="button" onclick="openScheduleHistoryModal()" class="text-xs font-medium text-blue-700 hover:underline cursor-pointer">
+              Full History →
+            </button>
+          </div>
+          ${(!state.history || state.history.length === 0) ? `
+            <div class="py-6 text-center text-xs text-slate-500">
+              <p>Using active schedule dataset (${escapeHtml((state.data.meta && state.data.meta.period) || 'First Semester 2026–2027')}).</p>
+              <p class="text-[11px] text-slate-400 mt-1">Changes made via workbook imports or conflict resolution will appear here.</p>
+            </div>
+          ` : `
+            <div class="divide-y divide-slate-100 mt-1">
+              ${state.history.slice(0, 4).map(h => `
+                <div class="py-2 flex items-start justify-between gap-2 text-xs">
+                  <div class="min-w-0">
+                    <div class="font-semibold text-slate-800 truncate">${escapeHtml(h.title)}</div>
+                    <div class="text-[11px] text-slate-500 truncate">${escapeHtml(h.summary)}</div>
+                  </div>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600 shrink-0">${escapeHtml(h.actionType)}</span>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+
+        <div class="pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-2">
+          <button type="button" onclick="jumpToAvailabilityFinder('${targetDay}', ${targetPeriodIdx})" class="h-8 px-3 rounded-md text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+            <i data-lucide="user-search" class="w-3.5 h-3.5" aria-hidden="true"></i>
+            <span>Find Free Faculty</span>
+          </button>
+          <button type="button" onclick="jumpToRoomAvailabilityFinder('${targetDay}', ${targetPeriodIdx})" class="h-8 px-3 rounded-md text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+            <i data-lucide="door-open" class="w-3.5 h-3.5" aria-hidden="true"></i>
+            <span>Find Vacant Room</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  initIcons();
+}
+
+/* =========================================================================
+   PRIORITY 1A: FACULTY AVAILABILITY FINDER
+   ========================================================================= */
+function getFacultyAvailabilityForSlot(day, periodIndex) {
+  if (!state.data || !Array.isArray(state.data.instructors)) return [];
+  const pIdx = Number(periodIndex) || 0;
+  const targetDay = day || 'MONDAY';
+
+  return state.data.instructors.map(inst => {
+    const daySessions = (inst.sessions || []).filter(s => s && s.day === targetDay);
+    const slotSessions = daySessions.filter(s => getSessionPeriodIndex(s) === pIdx);
+    const academicInSlot = slotSessions.filter(s => !s.isDuty);
+    const dutyInSlot = slotSessions.filter(s => s.isDuty);
+
+    let statusCode = 'AVAILABLE';
+    let statusLabel = 'Available';
+    let currentActivity = 'No scheduled class or duty in this period';
+
+    if (academicInSlot.length > 0) {
+      statusCode = 'IN_CLASS';
+      statusLabel = 'In Class';
+      currentActivity = academicInSlot.map(s => `${s.subject} (Sec ${s.section}) • ${s.room}`).join(' / ');
+    } else if (dutyInSlot.length > 0) {
+      statusCode = 'ON_DUTY';
+      statusLabel = 'Office Duty';
+      currentActivity = dutyInSlot.map(s => `${s.dutyName || s.subject} • ${s.room}`).join(' / ');
+    }
+
+    // Count consecutive free periods starting from pIdx if available
+    let consecutiveFree = 0;
+    if (statusCode === 'AVAILABLE') {
+      for (let idx = pIdx; idx < PERIOD_DEFINITIONS.length; idx++) {
+        const busy = daySessions.some(s => getSessionPeriodIndex(s) === idx);
+        if (busy) break;
+        consecutiveFree++;
+      }
+    }
+
+    // Find next scheduled class later on targetDay
+    const upcomingToday = daySessions
+      .map(s => ({ session: s, periodDef: PERIOD_DEFINITIONS[getSessionPeriodIndex(s)] || PERIOD_DEFINITIONS[0] }))
+      .filter(item => item.periodDef.index > pIdx)
+      .sort((a, b) => a.periodDef.index - b.periodDef.index);
+
+    const nextEntry = upcomingToday.length > 0 ? upcomingToday[0] : null;
+    const isFT = Boolean(inst.status && (inst.status.includes('FT') || inst.status.toUpperCase().includes('FULL-TIME')));
+    const totalDayClasses = daySessions.filter(s => !s.isDuty).length;
+
+    return {
+      instructor: inst,
+      name: inst.name,
+      status: inst.status || 'Faculty',
+      isFT,
+      statusCode,
+      statusLabel,
+      currentActivity,
+      consecutiveFree,
+      freeHours: (consecutiveFree * 1.5).toFixed(1).replace(/\.0$/, ''),
+      nextSession: nextEntry ? nextEntry.session : null,
+      nextPeriodDef: nextEntry ? nextEntry.periodDef : null,
+      totalDayClasses
+    };
+  });
+}
+
+window.setInstructorViewMode = function(mode) {
+  state.instructorViewMode = mode === 'availability' ? 'availability' : 'timetable';
+  const btnTimetable = document.getElementById('instructor-mode-timetable');
+  const btnAvail = document.getElementById('instructor-mode-availability');
+  const timetableWrapper = document.getElementById('instructor-timetable-view-wrapper');
+  const availContainer = document.getElementById('faculty-availability-finder-container');
+  const searchGroup = document.getElementById('instructor-search-toolbar-group');
+  const stepperGroup = document.getElementById('instructor-stepper-group');
+
+  const activeClasses = ['bg-white', 'text-slate-900', 'font-semibold', 'shadow-2xs'];
+  const inactiveClasses = ['text-slate-600', 'hover:text-slate-900', 'font-medium'];
+
+  if (state.instructorViewMode === 'availability') {
+    if (btnAvail) {
+      btnAvail.classList.add(...activeClasses);
+      btnAvail.classList.remove(...inactiveClasses);
+      btnAvail.setAttribute('aria-pressed', 'true');
+    }
+    if (btnTimetable) {
+      btnTimetable.classList.remove(...activeClasses);
+      btnTimetable.classList.add(...inactiveClasses);
+      btnTimetable.setAttribute('aria-pressed', 'false');
+    }
+    if (timetableWrapper) timetableWrapper.classList.add('hidden');
+    if (searchGroup) searchGroup.classList.add('hidden');
+    if (stepperGroup) stepperGroup.classList.add('hidden');
+    if (availContainer) {
+      availContainer.classList.remove('hidden');
+      renderFacultyAvailabilityFinder();
+    }
+  } else {
+    if (btnTimetable) {
+      btnTimetable.classList.add(...activeClasses);
+      btnTimetable.classList.remove(...inactiveClasses);
+      btnTimetable.setAttribute('aria-pressed', 'true');
+    }
+    if (btnAvail) {
+      btnAvail.classList.remove(...activeClasses);
+      btnAvail.classList.add(...inactiveClasses);
+      btnAvail.setAttribute('aria-pressed', 'false');
+    }
+    if (availContainer) availContainer.classList.add('hidden');
+    if (timetableWrapper) timetableWrapper.classList.remove('hidden');
+    if (searchGroup) searchGroup.classList.remove('hidden');
+    if (stepperGroup) stepperGroup.classList.remove('hidden');
+    renderInstructorSchedule();
+  }
+  initIcons();
+};
+
+window.updateFacultyAvailabilityFilter = function(key, val) {
+  if (key === 'periodIndex') {
+    state.facultyAvailabilityFilter.periodIndex = parseInt(val, 10) || 0;
+  } else if (key in state.facultyAvailabilityFilter) {
+    state.facultyAvailabilityFilter[key] = val;
+  }
+  renderFacultyAvailabilityFinder();
+  initIcons();
+};
+
+function renderFacultyAvailabilityFinder() {
+  const container = document.getElementById('faculty-availability-finder-container');
+  if (!container || !state.data) return;
+
+  const { day, periodIndex, statusFilter, employmentFilter, search } = state.facultyAvailabilityFilter;
+  const periodDef = PERIOD_DEFINITIONS[periodIndex] || PERIOD_DEFINITIONS[0];
+  const allList = getFacultyAvailabilityForSlot(day, periodIndex);
+
+  const countAvailable = allList.filter(f => f.statusCode === 'AVAILABLE').length;
+  const countDuty = allList.filter(f => f.statusCode === 'ON_DUTY').length;
+  const countInClass = allList.filter(f => f.statusCode === 'IN_CLASS').length;
+
+  const q = String(search || '').toLowerCase().trim();
+  const filtered = allList.filter(item => {
+    if (statusFilter !== 'ALL' && item.statusCode !== statusFilter) return false;
+    if (employmentFilter === 'FULL_TIME' && !item.isFT) return false;
+    if (employmentFilter === 'PART_TIME' && item.isFT) return false;
+    if (q) {
+      const hay = `${item.name} ${item.status} ${item.currentActivity}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  container.innerHTML = `
+    <div class="bg-white border border-slate-200 rounded-lg shadow-2xs p-4 space-y-4">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3.5 border-b border-slate-200">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-600 text-white">FACULTY AVAILABILITY FINDER</span>
+            <h3 class="text-sm sm:text-base font-bold text-slate-900">Find Available Instructors by Day &amp; Time</h3>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">Identify free faculty members, office duty consultation hours, and next scheduled classes</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <select aria-label="Select Day for Faculty Availability"
+                  onchange="updateFacultyAvailabilityFilter('day', this.value)"
+                  class="h-8 px-2.5 rounded-md text-xs font-semibold bg-slate-50 border border-slate-300 text-slate-900 cursor-pointer">
+            ${["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"].map(d => `
+              <option value="${d}" ${d === day ? 'selected' : ''}>${DAY_TITLE_LABELS[d]}</option>
+            `).join('')}
+          </select>
+
+          <select aria-label="Select Period for Faculty Availability"
+                  onchange="updateFacultyAvailabilityFilter('periodIndex', this.value)"
+                  class="h-8 px-2.5 rounded-md text-xs font-mono font-semibold bg-slate-50 border border-slate-300 text-slate-900 cursor-pointer">
+            ${PERIOD_DEFINITIONS.map(p => `
+              <option value="${p.index}" ${p.index === periodIndex ? 'selected' : ''}>${p.code} · ${p.shortLabel}</option>
+            `).join('')}
+          </select>
+
+          <select aria-label="Filter by Employment Classification"
+                  onchange="updateFacultyAvailabilityFilter('employmentFilter', this.value)"
+                  class="h-8 px-2.5 rounded-md text-xs font-semibold bg-slate-50 border border-slate-300 text-slate-900 cursor-pointer">
+            <option value="ALL" ${employmentFilter === 'ALL' ? 'selected' : ''}>All Employment Types</option>
+            <option value="FULL_TIME" ${employmentFilter === 'FULL_TIME' ? 'selected' : ''}>Full-Time Only</option>
+            <option value="PART_TIME" ${employmentFilter === 'PART_TIME' ? 'selected' : ''}>Part-Time Only</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Status Filter Pills & Quick Search -->
+      <div class="flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button"
+                  onclick="updateFacultyAvailabilityFilter('statusFilter', 'ALL')"
+                  class="h-7 px-2.5 rounded-md text-xs border transition-colors cursor-pointer ${
+                    statusFilter === 'ALL' ? 'bg-slate-900 text-white border-slate-900 font-semibold' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 font-medium'
+                  }">
+            All Faculty (${allList.length})
+          </button>
+          <button type="button"
+                  onclick="updateFacultyAvailabilityFilter('statusFilter', 'AVAILABLE')"
+                  class="h-7 px-2.5 rounded-md text-xs border transition-colors cursor-pointer ${
+                    statusFilter === 'AVAILABLE' ? 'bg-emerald-700 text-white border-emerald-700 font-semibold' : 'bg-emerald-50/70 text-emerald-800 border-emerald-200 hover:bg-emerald-100/70 font-medium'
+                  }">
+            Available / Free (${countAvailable})
+          </button>
+          <button type="button"
+                  onclick="updateFacultyAvailabilityFilter('statusFilter', 'ON_DUTY')"
+                  class="h-7 px-2.5 rounded-md text-xs border transition-colors cursor-pointer ${
+                    statusFilter === 'ON_DUTY' ? 'bg-amber-600 text-white border-amber-600 font-semibold' : 'bg-amber-50/70 text-amber-900 border-amber-200 hover:bg-amber-100/70 font-medium'
+                  }">
+            Office / Consultation Duty (${countDuty})
+          </button>
+          <button type="button"
+                  onclick="updateFacultyAvailabilityFilter('statusFilter', 'IN_CLASS')"
+                  class="h-7 px-2.5 rounded-md text-xs border transition-colors cursor-pointer ${
+                    statusFilter === 'IN_CLASS' ? 'bg-blue-700 text-white border-blue-700 font-semibold' : 'bg-blue-50/70 text-blue-800 border-blue-200 hover:bg-blue-100/70 font-medium'
+                  }">
+            Occupied in Class (${countInClass})
+          </button>
+        </div>
+
+        <div class="relative w-full sm:w-64 flex items-center">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" aria-hidden="true"></i>
+          <input type="text"
+                 value="${escapeHtmlAttr(search)}"
+                 oninput="updateFacultyAvailabilityFilter('search', this.value)"
+                 placeholder="Filter instructor name..."
+                 class="w-full h-8 pl-8 pr-3 rounded-md text-xs bg-slate-50 border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white">
+        </div>
+      </div>
+
+      ${filtered.length === 0 ? `
+        <div class="p-8 text-center rounded-lg border border-slate-200 bg-slate-50/50 text-xs text-slate-500">
+          No faculty members match the selected availability filter for ${DAY_TITLE_LABELS[day]} ${periodDef.code}.
+        </div>
+      ` : `
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+          ${filtered.map(item => {
+            const color = getInstructorColor(item.name);
+            const badgeStyle = item.statusCode === 'AVAILABLE'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : item.statusCode === 'ON_DUTY'
+                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                : 'bg-blue-50 text-blue-700 border-blue-200';
+
+            const nextHint = item.nextSession && item.nextPeriodDef
+              ? `Next: ${item.nextSession.isDuty ? (item.nextSession.dutyName || 'Office Duty') : `${item.nextSession.subject} (${item.nextSession.room})`} at ${item.nextPeriodDef.code} (${item.nextPeriodDef.start})`
+              : `No remaining classes on ${DAY_SHORT_LABELS[day]}`;
+
+            return `
+              <div role="button" tabindex="0"
+                   onclick="selectInstructorAutocomplete('${escapeHtmlAttr(item.name)}')"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectInstructorAutocomplete('${escapeHtmlAttr(item.name)}');}"
+                   class="p-3.5 rounded-lg border border-slate-200 hover:border-blue-300 bg-white transition-all cursor-pointer shadow-2xs flex flex-col justify-between gap-2.5">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${color.ring}"></span>
+                    <div class="min-w-0">
+                      <div class="text-xs sm:text-sm font-bold text-slate-900 truncate">${escapeHtml(item.name)}</div>
+                      <div class="text-[11px] text-slate-500">${item.isFT ? 'Full-Time' : escapeHtml(item.status)} • ${item.totalDayClasses} classes on ${DAY_SHORT_LABELS[day]}</div>
+                    </div>
+                  </div>
+                  <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold border shrink-0 ${badgeStyle}">
+                    ${escapeHtml(item.statusLabel)}
+                  </span>
+                </div>
+
+                <div class="text-xs ${item.statusCode === 'AVAILABLE' ? 'text-emerald-800 font-medium' : 'text-slate-700 font-medium'} bg-slate-50 px-2.5 py-1.5 rounded border border-slate-100">
+                  ${item.statusCode === 'AVAILABLE'
+                    ? `Free for ${item.consecutiveFree} ${item.consecutiveFree === 1 ? 'period' : 'periods'} (${item.freeHours}h starting ${periodDef.code})`
+                    : escapeHtml(item.currentActivity)
+                  }
+                </div>
+
+                <div class="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                  <span class="truncate font-mono">${escapeHtml(nextHint)}</span>
+                  <span class="text-blue-700 font-medium shrink-0">Timetable →</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `}
+    </div>
+  `;
+}
 
 window.stepInstructor = function(delta) {
   if (!state.data || !Array.isArray(state.data.instructors) || state.data.instructors.length === 0) return;
@@ -1319,7 +2328,7 @@ function getRoomBuildingTag(roomCode) {
   return { code: 'OTHER', label: 'Main / Other' };
 }
 
-function getVacantRoomsForSlot(day, periodIndex, buildingFilter = 'ALL') {
+function getRoomsStatusForSlot(day, periodIndex, buildingFilter = 'ALL') {
   if (!state.data || !Array.isArray(state.data.rooms)) return [];
   const pIdx = Number(periodIndex) || 0;
   const allRooms = state.data.rooms.filter(r => r && r !== 'OFFICE / DEPT' && r !== 'TBA');
@@ -1330,36 +2339,55 @@ function getVacantRoomsForSlot(day, periodIndex, buildingFilter = 'ALL') {
     const bldg = getRoomBuildingTag(room);
     if (buildingFilter !== 'ALL' && bldg.code !== buildingFilter) return;
 
-    const occupiedInTarget = sessionsOnDay.some(s => s.room === room && getSessionPeriodIndex(s) === pIdx);
-    if (occupiedInTarget) return;
+    const occupyingSessions = sessionsOnDay.filter(s => s.room === room && getSessionPeriodIndex(s) === pIdx);
+    const isOccupied = occupyingSessions.length > 0;
 
     // Count consecutive free periods starting from pIdx
     let consecutiveFree = 0;
     let lastFreeIdx = pIdx;
-    for (let idx = pIdx; idx < PERIOD_DEFINITIONS.length; idx++) {
-      const busy = sessionsOnDay.some(s => s.room === room && getSessionPeriodIndex(s) === idx);
-      if (busy) break;
-      consecutiveFree++;
-      lastFreeIdx = idx;
+    if (!isOccupied) {
+      for (let idx = pIdx; idx < PERIOD_DEFINITIONS.length; idx++) {
+        const busy = sessionsOnDay.some(s => s.room === room && getSessionPeriodIndex(s) === idx);
+        if (busy) break;
+        consecutiveFree++;
+        lastFreeIdx = idx;
+      }
     }
 
-    // Total classes in this room on this day
+    // Find next class in this room today
+    const nextRoomSessions = sessionsOnDay
+      .map(s => ({ session: s, periodDef: PERIOD_DEFINITIONS[getSessionPeriodIndex(s)] || PERIOD_DEFINITIONS[0] }))
+      .filter(item => item.session.room === room && item.periodDef.index > pIdx)
+      .sort((a, b) => a.periodDef.index - b.periodDef.index);
+    const nextInRoom = nextRoomSessions.length > 0 ? nextRoomSessions[0] : null;
+
     const dayRoomCount = sessionsOnDay.filter(s => s.room === room).length;
     const endPeriodDef = PERIOD_DEFINITIONS[lastFreeIdx] || PERIOD_DEFINITIONS[pIdx];
 
     results.push({
       room,
+      isOccupied,
+      occupyingSessions,
       buildingCode: bldg.code,
       buildingLabel: bldg.label,
       consecutiveFree,
       freeHours: (consecutiveFree * 1.5).toFixed(1).replace(/\.0$/, ''),
       freeUntilCode: endPeriodDef.code,
       freeUntilTime: endPeriodDef.end,
+      nextSession: nextInRoom ? nextInRoom.session : null,
+      nextPeriodDef: nextInRoom ? nextInRoom.periodDef : null,
       dayRoomCount
     });
   });
 
-  return results.sort((a, b) => b.consecutiveFree - a.consecutiveFree || a.room.localeCompare(b.room, undefined, { numeric: true }));
+  return results.sort((a, b) => {
+    if (a.isOccupied !== b.isOccupied) return a.isOccupied ? 1 : -1;
+    return b.consecutiveFree - a.consecutiveFree || a.room.localeCompare(b.room, undefined, { numeric: true });
+  });
+}
+
+function getVacantRoomsForSlot(day, periodIndex, buildingFilter = 'ALL') {
+  return getRoomsStatusForSlot(day, periodIndex, buildingFilter).filter(r => !r.isOccupied);
 }
 
 window.setRoomViewMode = function(mode) {
@@ -1419,6 +2447,8 @@ window.updateVacantRoomFilter = function(key, val) {
     state.vacantFilter.day = val;
   } else if (key === 'building') {
     state.vacantFilter.building = val;
+  } else if (key === 'occupancyFilter') {
+    state.vacantFilter.occupancyFilter = val;
   }
   renderVacantRoomFinder();
   initIcons();
@@ -1428,10 +2458,17 @@ function renderVacantRoomFinder() {
   const container = document.getElementById('vacant-room-finder-container');
   if (!container || !state.data) return;
 
-  const { day, periodIndex, building } = state.vacantFilter;
+  const { day, periodIndex, building, occupancyFilter = 'ALL' } = state.vacantFilter;
   const periodDef = PERIOD_DEFINITIONS[periodIndex] || PERIOD_DEFINITIONS[0];
-  const vacantRooms = getVacantRoomsForSlot(day, periodIndex, building);
-  const totalPhysicalRooms = (state.data.rooms || []).filter(r => r && r !== 'OFFICE / DEPT' && r !== 'TBA').length;
+  const allRoomsForSlot = getRoomsStatusForSlot(day, periodIndex, building);
+  const vacantCount = allRoomsForSlot.filter(r => !r.isOccupied).length;
+  const occupiedCount = allRoomsForSlot.filter(r => r.isOccupied).length;
+
+  const displayedRooms = allRoomsForSlot.filter(r => {
+    if (occupancyFilter === 'VACANT') return !r.isOccupied;
+    if (occupancyFilter === 'OCCUPIED') return r.isOccupied;
+    return true;
+  });
 
   const buildings = [
     { code: 'ALL', label: 'All Buildings' },
@@ -1446,10 +2483,10 @@ function renderVacantRoomFinder() {
       <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3.5 border-b border-slate-200">
         <div>
           <div class="flex items-center gap-2">
-            <span class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-600 text-white">VACANT ROOM FINDER</span>
-            <h3 class="text-sm sm:text-base font-bold text-slate-900">Available Classrooms &amp; Laboratories</h3>
+            <span class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-600 text-white">ROOM AVAILABILITY FINDER</span>
+            <h3 class="text-sm sm:text-base font-bold text-slate-900">Classrooms &amp; Laboratories Occupancy Status</h3>
           </div>
-          <p class="text-xs text-slate-500 mt-0.5">Find 100% unscheduled rooms for make-up classes, exams, or conflict resolution</p>
+          <p class="text-xs text-slate-500 mt-0.5">Inspect vacant rooms, consecutive free hours, and current room occupants for any day and period</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -1485,39 +2522,98 @@ function renderVacantRoomFinder() {
         </div>
       </div>
 
-      <div class="flex items-center justify-between text-xs text-slate-600">
-        <span>Showing <strong class="font-mono font-semibold text-emerald-700">${vacantRooms.length}</strong> vacant rooms out of <span class="font-mono">${totalPhysicalRooms}</span> total rooms on <strong>${DAY_TITLE_LABELS[day]} • ${periodDef.code} (${periodDef.label})</strong></span>
-        <span class="text-[11px] text-slate-400 hidden sm:inline">Click any room card to inspect its full weekly matrix</span>
+      <!-- Occupancy Filter Pills -->
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button"
+                  onclick="updateVacantRoomFilter('occupancyFilter', 'ALL')"
+                  class="h-7 px-2.5 rounded-md border transition-colors cursor-pointer ${
+                    occupancyFilter === 'ALL' ? 'bg-slate-900 text-white border-slate-900 font-semibold' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 font-medium'
+                  }">
+            All Rooms (${allRoomsForSlot.length})
+          </button>
+          <button type="button"
+                  onclick="updateVacantRoomFilter('occupancyFilter', 'VACANT')"
+                  class="h-7 px-2.5 rounded-md border transition-colors cursor-pointer ${
+                    occupancyFilter === 'VACANT' ? 'bg-emerald-700 text-white border-emerald-700 font-semibold' : 'bg-emerald-50/70 text-emerald-800 border-emerald-200 hover:bg-emerald-100/70 font-medium'
+                  }">
+            Vacant Rooms (${vacantCount})
+          </button>
+          <button type="button"
+                  onclick="updateVacantRoomFilter('occupancyFilter', 'OCCUPIED')"
+                  class="h-7 px-2.5 rounded-md border transition-colors cursor-pointer ${
+                    occupancyFilter === 'OCCUPIED' ? 'bg-blue-700 text-white border-blue-700 font-semibold' : 'bg-blue-50/70 text-blue-800 border-blue-200 hover:bg-blue-100/70 font-medium'
+                  }">
+            Occupied Rooms (${occupiedCount})
+          </button>
+        </div>
+        <span class="text-[11px] text-slate-500">
+          <strong>${DAY_TITLE_LABELS[day]} • ${periodDef.code} (${periodDef.label})</strong> — Click any room to open its full weekly matrix
+        </span>
       </div>
 
-      ${vacantRooms.length === 0 ? `
+      ${displayedRooms.length === 0 ? `
         <div class="p-8 text-center rounded-lg border border-slate-200 bg-slate-50/50 text-xs text-slate-500">
-          No vacant rooms match this building and time slot. Try selecting "All Buildings" or an adjacent period.
+          No rooms match this building and availability filter. Try selecting "All Buildings" or "All Rooms".
         </div>
       ` : `
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
-          ${vacantRooms.map(item => `
-            <div role="button" tabindex="0"
-                 onclick="selectRoom('${escapeHtmlAttr(item.room)}')"
-                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectRoom('${escapeHtmlAttr(item.room)}');}"
-                 class="p-3 rounded-lg border border-slate-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/20 transition-all cursor-pointer shadow-2xs flex flex-col justify-between gap-2">
-              <div class="flex items-start justify-between gap-2">
-                <div>
-                  <span class="font-mono text-sm font-bold text-slate-900">${item.room}</span>
-                  <div class="text-[11px] text-slate-500 mt-0.5">${item.buildingLabel}</div>
+          ${displayedRooms.map(item => {
+            if (!item.isOccupied) {
+              const nextNote = item.nextSession && item.nextPeriodDef
+                ? `Next: ${item.nextSession.subject} (${item.nextPeriodDef.code})`
+                : 'Free rest of day';
+              return `
+                <div role="button" tabindex="0"
+                     onclick="selectRoom('${escapeHtmlAttr(item.room)}')"
+                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectRoom('${escapeHtmlAttr(item.room)}');}"
+                     class="p-3 rounded-lg border border-slate-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/20 transition-all cursor-pointer shadow-2xs flex flex-col justify-between gap-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <span class="font-mono text-sm font-bold text-slate-900">${escapeHtml(item.room)}</span>
+                      <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(item.buildingLabel)} • ${item.dayRoomCount} classes today</div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                      Vacant ${periodDef.code}
+                    </span>
+                  </div>
+                  <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                    <span class="font-medium text-emerald-800">
+                      Free <strong>${item.consecutiveFree}p</strong> (${item.freeHours}h · until ${item.freeUntilTime})
+                    </span>
+                    <span class="font-mono text-slate-400 truncate">${escapeHtml(nextNote)}</span>
+                  </div>
                 </div>
-                <span class="px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                  Vacant ${periodDef.code}
-                </span>
-              </div>
-              <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
-                <span class="font-medium text-emerald-800">
-                  Free for <strong>${item.consecutiveFree} ${item.consecutiveFree === 1 ? 'period' : 'periods'}</strong> (${item.freeHours}h · until ${item.freeUntilTime})
-                </span>
-                <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true"></i>
-              </div>
-            </div>
-          `).join('')}
+              `;
+            } else {
+              const isClash = item.occupyingSessions.length > 1;
+              const s = item.occupyingSessions[0];
+              return `
+                <div role="button" tabindex="0"
+                     onclick="selectRoom('${escapeHtmlAttr(item.room)}')"
+                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectRoom('${escapeHtmlAttr(item.room)}');}"
+                     class="p-3 rounded-lg border ${isClash ? 'border-red-300 bg-red-50/30' : 'border-slate-200 bg-slate-50/60'} hover:border-blue-400 transition-all cursor-pointer shadow-2xs flex flex-col justify-between gap-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <span class="font-mono text-sm font-bold text-slate-900">${escapeHtml(item.room)}</span>
+                      <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(item.buildingLabel)}</div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold ${isClash ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-blue-50 text-blue-700 border border-blue-200'} shrink-0">
+                      ${isClash ? `Clash (${item.occupyingSessions.length})` : `Occupied ${periodDef.code}`}
+                    </span>
+                  </div>
+                  <div class="pt-2 border-t border-slate-200/70 text-[11px] text-slate-700 space-y-0.5">
+                    <div class="font-semibold text-slate-900 truncate">
+                      ${escapeHtml(item.occupyingSessions.map(os => `${os.subject} (Sec ${os.section})`).join(' / '))}
+                    </div>
+                    <div class="text-slate-500 truncate">
+                      Instructor: <strong class="text-slate-800">${escapeHtml(item.occupyingSessions.map(os => os.instructor.split(',')[0]).join(' & '))}</strong>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+          }).join('')}
         </div>
       `}
     </div>
@@ -1602,6 +2698,8 @@ window.closeConflictResolverModal = function() {
 window.reassignSessionRoom = function(instructorName, day, periodIndex, subject, section, oldRoom, newRoom) {
   if (!state.data || !newRoom || newRoom === oldRoom) return;
   const pIdx = Number(periodIndex) || 0;
+  const pDef = PERIOD_DEFINITIONS[pIdx] || PERIOD_DEFINITIONS[0];
+  const previousData = JSON.parse(JSON.stringify(state.data));
 
   // Update matching session in state.data.sessions
   let updatedFlat = false;
@@ -1625,9 +2723,16 @@ window.reassignSessionRoom = function(instructorName, day, periodIndex, subject,
   }
 
   recalculateConflicts(state.data);
-  try {
-    localStorage.setItem('cea_schedule_data', JSON.stringify(state.data));
-  } catch (e) {}
+  safeStorageSet('cea_schedule_data', JSON.stringify(state.data));
+
+  recordScheduleHistoryEntry({
+    actionType: oldRoom === 'TBA' ? 'ASSIGN_ROOM' : 'REASSIGN',
+    title: `${oldRoom === 'TBA' ? 'Assigned' : 'Reassigned'} ${subject} (Sec ${section}) to ${newRoom}`,
+    summary: `Moved ${instructorName.split(',')[0]}'s ${subject} (Sec ${section}) on ${DAY_TITLE_LABELS[day] || day} ${pDef.code} from ${oldRoom} to ${newRoom}.`,
+    source: 'Room Conflict Resolver',
+    previousData,
+    updatedData: state.data
+  });
 
   closeConflictResolverModal();
   renderAll();
@@ -1686,6 +2791,13 @@ function renderRoomOccupancy() {
               <span class="text-xs font-semibold text-slate-800 font-mono tabular-nums">${utilPercent}%</span>
             </div>
           </div>
+          <button type="button"
+                  onclick="window.print()"
+                  class="h-8 px-3 rounded-md text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Print ${escapeHtmlAttr(currentRoom)} room schedule">
+            <i data-lucide="printer" class="w-3.5 h-3.5 text-slate-500" aria-hidden="true"></i>
+            <span>Print Room</span>
+          </button>
         </div>
       </div>
     `;
@@ -3131,6 +4243,71 @@ function renderSectionSchedule() {
 /* =========================================================================
    TAB 5: DEPARTMENT FACULTY ROSTER & LOAD ANALYTICS (FLR-001)
    ========================================================================= */
+window.updateRosterFilter = function(key, val) {
+  if (!state.rosterFilter) {
+    state.rosterFilter = { search: '', loadFilter: 'ALL', sortBy: 'NAME_ASC' };
+  }
+  state.rosterFilter[key] = val;
+  renderRosterView();
+  initIcons();
+};
+
+window.exportWorkloadReportCsv = function() {
+  if (!state.data || !Array.isArray(state.data.instructors)) return;
+
+  const headers = [
+    'No',
+    'FacultyName',
+    'EmploymentStatus',
+    'AcademicQualification',
+    'AcademicClassesCount',
+    'AcademicContactHours',
+    'OfficeDutyPeriods',
+    'OfficeDutyHours',
+    'TotalWeeklyHours',
+    'LoadClassification',
+    'MaxConsecutivePeriods',
+    'MaxStreakDay',
+    'AssignedCourses',
+    'AssignedRooms'
+  ];
+
+  const rows = state.data.instructors.map((inst, idx) => {
+    const metrics = getFacultyLoadAnalytics(inst);
+    const academicSessions = (inst.sessions || []).filter(s => !s.isDuty);
+    const courses = [...new Set(academicSessions.map(s => s.subject).filter(Boolean))].join('; ');
+    const rooms = [...new Set(academicSessions.map(s => s.room).filter(r => r && r !== 'OFFICE / DEPT'))].join('; ');
+
+    return [
+      sanitizeCsvCell(idx + 1),
+      sanitizeCsvCell(inst.name),
+      sanitizeCsvCell(inst.status || 'Faculty'),
+      sanitizeCsvCell(inst.qualification || '-'),
+      sanitizeCsvCell(metrics.academicCount),
+      sanitizeCsvCell(metrics.academicHours.toFixed(1)),
+      sanitizeCsvCell(metrics.dutyCount),
+      sanitizeCsvCell(metrics.dutyHours.toFixed(1)),
+      sanitizeCsvCell(metrics.totalHours.toFixed(1)),
+      sanitizeCsvCell(metrics.loadLabel),
+      sanitizeCsvCell(metrics.maxStreak),
+      sanitizeCsvCell(metrics.maxStreakDay || '-'),
+      sanitizeCsvCell(courses),
+      sanitizeCsvCell(rooms)
+    ];
+  });
+
+  const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `CEA_Faculty_Workload_Report_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showNotification('Exported faculty workload report to CSV', 'success');
+};
+
 function renderRosterView() {
   if (!state.data) return;
 
@@ -3139,14 +4316,14 @@ function renderRosterView() {
   if (!container) return;
 
   const instructors = state.data.instructors || [];
-  const analyticsList = instructors.map(inst => ({
+  const allAnalytics = instructors.map(inst => ({
     inst,
     metrics: getFacultyLoadAnalytics(inst)
   }));
 
-  const overloadCount = analyticsList.filter(a => a.metrics.loadCode === 'OVERLOAD').length;
-  const regularCount = analyticsList.filter(a => a.metrics.loadCode === 'REGULAR').length;
-  const totalDeptHours = analyticsList.reduce((acc, a) => acc + a.metrics.academicHours, 0);
+  const overloadCount = allAnalytics.filter(a => a.metrics.loadCode === 'OVERLOAD').length;
+  const regularCount = allAnalytics.filter(a => a.metrics.loadCode === 'REGULAR').length;
+  const totalDeptHours = allAnalytics.reduce((acc, a) => acc + a.metrics.academicHours, 0);
 
   if (summaryEl) {
     summaryEl.innerHTML = `
@@ -3164,6 +4341,42 @@ function renderRosterView() {
     `;
   }
 
+  const { search = '', loadFilter = 'ALL', sortBy = 'NAME_ASC' } = state.rosterFilter || {};
+  const q = String(search).toLowerCase().trim();
+
+  const analyticsList = allAnalytics.filter(({ inst, metrics }) => {
+    if (loadFilter === 'OVERLOAD' && metrics.loadCode !== 'OVERLOAD') return false;
+    if (loadFilter === 'REGULAR' && metrics.loadCode !== 'REGULAR') return false;
+    if (loadFilter === 'PART_TIME' && metrics.loadCode !== 'PART_TIME') return false;
+    if (loadFilter === 'STREAK' && metrics.maxStreak < 3) return false;
+    if (loadFilter === 'ZERO_LOAD' && metrics.academicCount > 0) return false;
+
+    if (q) {
+      const courses = (inst.sessions || []).map(s => s.subject || '').join(' ');
+      const hay = `${inst.name} ${inst.status || ''} ${inst.qualification || ''} ${courses}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  analyticsList.sort((a, b) => {
+    if (sortBy === 'HOURS_DESC') return b.metrics.academicHours - a.metrics.academicHours || a.inst.name.localeCompare(b.inst.name);
+    if (sortBy === 'HOURS_ASC') return a.metrics.academicHours - b.metrics.academicHours || a.inst.name.localeCompare(b.inst.name);
+    if (sortBy === 'STREAK_DESC') return b.metrics.maxStreak - a.metrics.maxStreak || b.metrics.academicHours - a.metrics.academicHours;
+    if (sortBy === 'STATUS') return String(a.inst.status || '').localeCompare(String(b.inst.status || '')) || a.inst.name.localeCompare(b.inst.name);
+    return a.inst.name.localeCompare(b.inst.name);
+  });
+
+  if (analyticsList.length === 0) {
+    container.innerHTML = `
+      <div class="p-10 text-center rounded-lg border border-slate-200 bg-white text-xs text-slate-500 shadow-2xs">
+        <div class="font-semibold text-slate-800 text-sm">No faculty members match the selected workload filter</div>
+        <p class="mt-1">Try clearing the search box or switching the Load Filter back to "All Faculty".</p>
+      </div>
+    `;
+    return;
+  }
+
   container.innerHTML = `
     <!-- 1. Mobile Faculty Cards (<640px) -->
     <div class="sm:hidden space-y-2.5">
@@ -3175,13 +4388,13 @@ function renderRosterView() {
               <div class="flex items-center gap-2 min-w-0">
                 <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${color.ring}"></span>
                 <span class="text-xs font-mono text-slate-500">${String(idx + 1).padStart(2, '0')}</span>
-                <span class="font-semibold text-sm text-slate-900 truncate">${inst.name}</span>
+                <span class="font-semibold text-sm text-slate-900 truncate">${escapeHtml(inst.name)}</span>
               </div>
               <span class="px-2 py-0.5 rounded-full text-[11px] font-medium border shrink-0 ${metrics.loadBadgeClass}">
-                ${metrics.loadLabel}
+                ${escapeHtml(metrics.loadLabel)}
               </span>
             </div>
-            <div class="text-xs text-slate-600 leading-snug">${inst.qualification || '-'}</div>
+            <div class="text-xs text-slate-600 leading-snug">${escapeHtml(inst.qualification || '-')}</div>
             <div class="flex items-center justify-between pt-2 border-t border-slate-100">
               <span class="text-xs font-mono font-semibold text-slate-700">${metrics.academicCount} classes (${metrics.academicHours.toFixed(1).replace(/\.0$/, '')} hrs/wk)</span>
               <button type="button" class="px-3 py-1 rounded-md text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 cursor-pointer"
@@ -3219,17 +4432,17 @@ function renderRosterView() {
                 <td class="py-3 px-4 font-semibold text-slate-900">
                   <div class="flex items-center gap-2.5">
                     <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${color.ring}"></span>
-                    <span>${inst.name}</span>
+                    <span>${escapeHtml(inst.name)}</span>
                   </div>
                 </td>
                 <td class="py-3 px-4">
                   <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium ${
                     isFT ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
                   }">
-                    ${inst.status}
+                    ${escapeHtml(inst.status)}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-slate-600 text-xs max-w-[260px] truncate" title="${escapeHtmlAttr(inst.qualification || '-')}">${inst.qualification || '-'}</td>
+                <td class="py-3 px-4 text-slate-600 text-xs max-w-[260px] truncate" title="${escapeHtmlAttr(inst.qualification || '-')}">${escapeHtml(inst.qualification || '-')}</td>
                 <td class="py-3 px-4 text-center font-mono tabular-nums">
                   <span class="font-semibold text-slate-900">${metrics.academicCount}</span>
                   <span class="text-slate-400"> / ${metrics.dutyCount} duty</span>
@@ -3245,7 +4458,7 @@ function renderRosterView() {
                 <td class="py-3 px-4">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold border ${metrics.loadBadgeClass}">
-                      ${metrics.loadLabel}
+                      ${escapeHtml(metrics.loadLabel)}
                     </span>
                     ${metrics.maxStreak >= 3 ? `
                       <span class="px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-700" title="${metrics.maxStreak} back-to-back periods on ${metrics.maxStreakDay}">
@@ -3540,14 +4753,180 @@ window.viewInstructor = function(name) {
 };
 
 /* =========================================================================
-   FILE UPLOAD (SheetJS Integration)
+   FILE UPLOAD & STAGED VALIDATION PREVIEW WORKFLOW (SheetJS Integration)
    ========================================================================= */
+window.resetUploadModalPreview = function() {
+  state.pendingImport = null;
+  const stepSelect = document.getElementById('upload-step-select');
+  const previewContainer = document.getElementById('upload-preview-container');
+  const uploadStatus = document.getElementById('upload-status');
+  const chooseAnotherBtn = document.getElementById('upload-choose-another-btn');
+  const selectFileBtn = document.getElementById('upload-select-file-btn');
+  const confirmApplyBtn = document.getElementById('upload-confirm-apply-btn');
+  const fileInput = document.getElementById('excel-file-input');
+
+  if (stepSelect) stepSelect.classList.remove('hidden');
+  if (previewContainer) {
+    previewContainer.classList.add('hidden');
+    previewContainer.innerHTML = '';
+  }
+  if (uploadStatus) {
+    uploadStatus.classList.add('hidden');
+    uploadStatus.textContent = '';
+  }
+  if (chooseAnotherBtn) chooseAnotherBtn.classList.add('hidden');
+  if (selectFileBtn) selectFileBtn.classList.remove('hidden');
+  if (confirmApplyBtn) confirmApplyBtn.classList.add('hidden');
+  if (fileInput) fileInput.value = '';
+};
+
+window.cancelUploadModal = function() {
+  resetUploadModalPreview();
+  const uploadModal = document.getElementById('upload-modal');
+  if (uploadModal) uploadModal.classList.add('hidden');
+};
+
+window.confirmPendingScheduleImport = function() {
+  if (!state.pendingImport || !state.pendingImport.parsed) return;
+  const { parsed, fileName } = state.pendingImport;
+  const previousData = state.data ? JSON.parse(JSON.stringify(state.data)) : null;
+
+  state.data = parsed;
+  annotateSessionPeriods(state.data);
+  recalculateConflicts(state.data);
+  safeStorageSet('cea_schedule_data', JSON.stringify(state.data));
+
+  const academicCount = (state.data.sessions || []).filter(s => !s.isDuty).length;
+  recordScheduleHistoryEntry({
+    actionType: 'IMPORT',
+    title: `Imported Schedule from "${fileName}"`,
+    summary: `Loaded ${state.data.instructors.length} faculty members, ${academicCount} academic classes across ${state.data.rooms.length} rooms.`,
+    source: fileName,
+    previousData,
+    updatedData: state.data
+  });
+
+  setupDefaults();
+  renderAll();
+  cancelUploadModal();
+  showNotification(`Applied schedule from ${fileName}`, 'success');
+};
+
+function renderUploadPreviewStage(parsed, fileName) {
+  const stepSelect = document.getElementById('upload-step-select');
+  const previewContainer = document.getElementById('upload-preview-container');
+  const chooseAnotherBtn = document.getElementById('upload-choose-another-btn');
+  const selectFileBtn = document.getElementById('upload-select-file-btn');
+  const confirmApplyBtn = document.getElementById('upload-confirm-apply-btn');
+
+  if (!previewContainer) return;
+
+  if (stepSelect) stepSelect.classList.add('hidden');
+  if (chooseAnotherBtn) chooseAnotherBtn.classList.remove('hidden');
+  if (selectFileBtn) selectFileBtn.classList.add('hidden');
+  if (confirmApplyBtn) confirmApplyBtn.classList.remove('hidden');
+
+  const academicSessions = (parsed.sessions || []).filter(s => !s.isDuty);
+  const dutySessions = (parsed.sessions || []).filter(s => s.isDuty);
+  const diag = parsed.diagnostics || {
+    roomConflicts: parsed.conflicts || [],
+    instructorConflicts: [],
+    unassignedRoomSessions: academicSessions.filter(s => !s.room || s.room === 'TBA'),
+    missingSectionSessions: academicSessions.filter(s => !s.section || s.section === '-'),
+    zeroLoadInstructors: (parsed.instructors || []).filter(i => (i.sessions || []).filter(s => !s.isDuty).length === 0)
+  };
+
+  const hasWarnings =
+    diag.roomConflicts.length > 0 ||
+    diag.instructorConflicts.length > 0 ||
+    diag.unassignedRoomSessions.length > 0 ||
+    diag.zeroLoadInstructors.length > 0;
+
+  previewContainer.classList.remove('hidden');
+  previewContainer.innerHTML = `
+    <div class="p-3.5 rounded-lg border border-blue-200 bg-blue-50/60 flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-xs font-bold text-slate-900 truncate">Ready to Import: ${escapeHtml(fileName)}</div>
+        <div class="text-[11px] text-slate-600 mt-0.5">
+          ${escapeHtml((parsed.meta && parsed.meta.department) || 'Department Schedule')} • ${escapeHtml((parsed.meta && parsed.meta.period) || 'Current Term')}
+        </div>
+      </div>
+      <span class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-blue-700 text-white shrink-0">PREVIEW STAGE</span>
+    </div>
+
+    <!-- Extracted Counts Comparison -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+      <div class="p-2.5 rounded-lg border border-slate-200 bg-slate-50/70">
+        <div class="text-[11px] text-slate-500">Faculty Members</div>
+        <div class="text-base font-bold font-mono text-slate-900 mt-0.5">${parsed.instructors.length}</div>
+      </div>
+      <div class="p-2.5 rounded-lg border border-slate-200 bg-slate-50/70">
+        <div class="text-[11px] text-slate-500">Academic Classes</div>
+        <div class="text-base font-bold font-mono text-slate-900 mt-0.5">${academicSessions.length}</div>
+      </div>
+      <div class="p-2.5 rounded-lg border border-slate-200 bg-slate-50/70">
+        <div class="text-[11px] text-slate-500">Active Rooms</div>
+        <div class="text-base font-bold font-mono text-slate-900 mt-0.5">${parsed.rooms.length}</div>
+      </div>
+      <div class="p-2.5 rounded-lg border ${diag.roomConflicts.length > 0 ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}">
+        <div class="text-[11px] ${diag.roomConflicts.length > 0 ? 'text-red-700' : 'text-emerald-700'}">Room Conflicts</div>
+        <div class="text-base font-bold font-mono ${diag.roomConflicts.length > 0 ? 'text-red-700' : 'text-emerald-700'} mt-0.5">${diag.roomConflicts.length}</div>
+      </div>
+    </div>
+
+    <!-- Validation & Conflict Report -->
+    <div class="rounded-lg border ${hasWarnings ? 'border-amber-200 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/50'} p-3.5 space-y-2 text-xs">
+      <div class="font-semibold ${hasWarnings ? 'text-amber-900' : 'text-emerald-900'} flex items-center gap-1.5">
+        <i data-lucide="${hasWarnings ? 'alert-circle' : 'check-circle-2'}" class="w-4 h-4" aria-hidden="true"></i>
+        <span>${hasWarnings ? 'Validation Warnings & Detected Conflicts' : 'All Validation Checks Passed'}</span>
+      </div>
+      <ul class="space-y-1 text-[11.5px] text-slate-700 list-disc list-inside">
+        <li>Extracted <strong>${academicSessions.length}</strong> academic classes and <strong>${dutySessions.length}</strong> office duty periods.</li>
+        ${diag.roomConflicts.length > 0 ? `<li class="text-red-700 font-medium">${diag.roomConflicts.length} room double-booking conflicts detected (can be resolved after import).</li>` : '<li>Zero room double-booking conflicts.</li>'}
+        ${diag.instructorConflicts.length > 0 ? `<li class="text-amber-800">${diag.instructorConflicts.length} faculty time-slot overlaps detected.</li>` : ''}
+        ${diag.unassignedRoomSessions.length > 0 ? `<li class="text-amber-800">${diag.unassignedRoomSessions.length} classes have unassigned rooms (TBA).</li>` : ''}
+        ${diag.zeroLoadInstructors.length > 0 ? `<li class="text-amber-800">${diag.zeroLoadInstructors.length} faculty members have 0 academic classes assigned.</li>` : ''}
+      </ul>
+    </div>
+
+    <!-- Sample of Extracted Faculty -->
+    <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <div class="px-3 py-2 bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-700 flex items-center justify-between">
+        <span>Extracted Faculty Roster Preview (${parsed.instructors.length})</span>
+        <span class="font-mono text-slate-500">Current schedule will be snapshotted in History</span>
+      </div>
+      <div class="max-h-40 overflow-y-auto divide-y divide-slate-100 text-xs">
+        ${parsed.instructors.slice(0, 15).map((inst, i) => {
+          const acCount = (inst.sessions || []).filter(s => !s.isDuty).length;
+          return `
+            <div class="px-3 py-1.5 flex items-center justify-between gap-2">
+              <span class="font-medium text-slate-900 truncate">${i + 1}. ${escapeHtml(inst.name)}</span>
+              <span class="font-mono text-[11px] text-slate-500 shrink-0">${acCount} classes (${(acCount * 1.5).toFixed(1).replace(/\.0$/, '')}h)</span>
+            </div>
+          `;
+        }).join('')}
+        ${parsed.instructors.length > 15 ? `
+          <div class="px-3 py-1.5 text-center text-[11px] text-slate-400">
+            + ${parsed.instructors.length - 15} more faculty members
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  initIcons();
+}
+
 function setupFileUpload() {
   const dropZone = document.getElementById('drop-zone');
   const fileInput = document.getElementById('excel-file-input');
   const uploadStatus = document.getElementById('upload-status');
 
   if (!dropZone || !fileInput) return;
+
+  dropZone.addEventListener('click', () => {
+    fileInput.click();
+  });
 
   dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -3589,6 +4968,7 @@ function setupFileUpload() {
       document.head.appendChild(script);
     });
   }
+  window.ensureSheetJSLoaded = ensureSheetJSLoaded;
 
   function handleFile(file) {
     if (!file.name.match(/\.(xlsx|xls|csv)$/i)) {
@@ -3596,7 +4976,7 @@ function setupFileUpload() {
       return;
     }
 
-    showUploadStatus(`Reading and parsing "${file.name}"...`, 'info');
+    showUploadStatus(`Reading and validating "${file.name}"...`, 'info');
 
     ensureSheetJSLoaded().then(() => {
       const reader = new FileReader();
@@ -3608,33 +4988,28 @@ function setupFileUpload() {
           const parsed = window.parseScheduleWorkbook(workbook);
 
           if (!parsed.instructors || parsed.instructors.length === 0) {
-            showUploadStatus('No individual schedule sheets found in this file. Please make sure the sheets have "INDIVIDUAL FACULTY TEACHING LOAD ASSIGNMENT" or "CLASS SCHEDULE".', 'error');
+            showUploadStatus('No valid faculty schedules found in this file. Please ensure the workbook contains Form FLR-002 blocks, a "CLASS SCHEDULE" grid, or exported schedule columns.', 'error');
             return;
           }
 
-          state.data = parsed;
-          annotateSessionPeriods(state.data);
-          try {
-            localStorage.setItem('cea_schedule_data', JSON.stringify(parsed));
-          } catch (storageErr) {
-            console.warn('LocalStorage quota exceeded, data will remain in memory for this session.', storageErr);
-          }
+          annotateSessionPeriods(parsed);
+          recalculateConflicts(parsed);
 
-          setupDefaults();
-          renderAll();
+          state.pendingImport = {
+            parsed,
+            fileName: file.name
+          };
 
-          showUploadStatus(`Successfully parsed ${parsed.instructors.length} instructors, ${parsed.sessions.length} sessions across ${parsed.rooms.length} rooms!`, 'success');
-
-          setTimeout(() => {
-            const uploadModal = document.getElementById('upload-modal');
-            if (uploadModal) uploadModal.classList.add('hidden');
-            showNotification(`Loaded new schedule from ${file.name}`, 'success');
-          }, 1200);
+          showUploadStatus(`Parsed ${parsed.instructors.length} faculty members and ${parsed.sessions.length} schedule entries. Review below and click "Confirm & Apply Schedule".`, 'success');
+          renderUploadPreviewStage(parsed, file.name);
 
         } catch (err) {
           console.error('Error parsing workbook:', err);
-          showUploadStatus(`Failed to parse file: ${err.message}`, 'error');
+          showUploadStatus(`Failed to parse file: ${err.message}. Your existing schedule data was not modified.`, 'error');
         }
+      };
+      reader.onerror = function() {
+        showUploadStatus('Failed to read the selected file. Your existing schedule data was not modified.', 'error');
       };
       reader.readAsArrayBuffer(file);
     }).catch(err => {
@@ -3653,13 +5028,15 @@ function setupFileUpload() {
   }
 }
 
-// Notification Toast
+// Notification Toast (Safe textContent rendering)
 function showNotification(msg, type = 'info') {
   const toast = document.createElement('div');
-  toast.className = `fixed bottom-5 right-5 z-50 px-4 py-2.5 border text-xs font-mono font-semibold flex items-center gap-2 transition-all transform translate-y-2 opacity-0 ${
+  toast.className = `fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-md shadow-lg border text-xs font-mono font-semibold flex items-center gap-2 transition-all transform translate-y-2 opacity-0 ${
     type === 'success' ? 'bg-emerald-900 border-emerald-700 text-white' : 'bg-slate-900 border-slate-700 text-white'
   }`;
-  toast.innerHTML = `<span>${msg}</span>`;
+  const span = document.createElement('span');
+  span.textContent = msg;
+  toast.appendChild(span);
   document.body.appendChild(toast);
 
   requestAnimationFrame(() => {
@@ -3672,7 +5049,7 @@ function showNotification(msg, type = 'info') {
   }, 3500);
 }
 
-// CSV Exporter
+// CSV Exporter (Hardened against formula injection & embedded quotes)
 function exportScheduleToCsv() {
   if (!state.data || !state.data.sessions) return;
 
@@ -3680,14 +5057,14 @@ function exportScheduleToCsv() {
   const rows = state.data.sessions.map(s => {
     const pDef = PERIOD_DEFINITIONS[getSessionPeriodIndex(s)];
     return [
-      `"${s.day}"`,
-      `"${pDef ? pDef.code : ''}"`,
-      `"${pDef ? pDef.shortLabel : s.timeSlot}"`,
-      `"${s.subject}"`,
-      `"${s.section}"`,
-      `"${s.room}"`,
-      `"${s.instructor}"`,
-      s.isDuty ? 'Yes' : 'No'
+      sanitizeCsvCell(s.day),
+      sanitizeCsvCell(pDef ? pDef.code : ''),
+      sanitizeCsvCell(pDef ? pDef.shortLabel : s.timeSlot),
+      sanitizeCsvCell(s.subject),
+      sanitizeCsvCell(s.section),
+      sanitizeCsvCell(s.room),
+      sanitizeCsvCell(s.instructor),
+      sanitizeCsvCell(s.isDuty ? 'Yes' : 'No')
     ];
   });
 
@@ -4386,4 +5763,25 @@ function renderLiveAvailabilityPanel() {
   `;
 
   initIcons();
+}
+
+// Export core business logic for automated Node.js test verification
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    state,
+    PERIOD_DEFINITIONS,
+    annotateSessionPeriods,
+    getSessionPeriodIndex,
+    recalculateConflicts,
+    getFacultyLoadAnalytics,
+    getFacultyAvailabilityForSlot,
+    getRoomsStatusForSlot,
+    getVacantRoomsForSlot,
+    getRoomBuildingTag,
+    escapeHtml,
+    escapeHtmlAttr,
+    sanitizeCsvCell,
+    highlightMatchText,
+    recordScheduleHistoryEntry
+  };
 }
