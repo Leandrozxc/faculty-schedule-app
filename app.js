@@ -1581,9 +1581,15 @@ function renderOverviewDashboard() {
             <div class="mt-3 space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
               ${diag.roomConflicts.map(c => {
                 const pDef = PERIOD_DEFINITIONS[c.periodIndex] || PERIOD_DEFINITIONS[0];
-                const vacantForSlot = getVacantRoomsForSlot(c.day, c.periodIndex, 'ALL');
+                const bldgTag = getRoomBuildingTag(c.room);
+                const sameBldgVacant = getVacantRoomsForSlot(c.day, c.periodIndex, bldgTag.code);
+                const allVacantForSlot = getVacantRoomsForSlot(c.day, c.periodIndex, 'ALL');
+                const recommendedRooms = (sameBldgVacant.length > 0 ? sameBldgVacant : allVacantForSlot).slice(0, 3);
+                const recText = sameBldgVacant.length > 0
+                  ? `Reassign one session to an available room in ${bldgTag.label} (e.g., ${recommendedRooms.map(v => v.room).join(', ')})`
+                  : `No vacant rooms in ${bldgTag.label} during ${pDef.code}; reassign to a nearby building (e.g., ${recommendedRooms.map(v => v.room).join(', ') || 'any vacant room'})`;
                 return `
-                  <div class="p-3 rounded-lg border border-red-200 bg-red-50/50 space-y-2">
+                  <div class="p-3 rounded-lg border border-red-200 bg-red-50 space-y-2">
                     <div class="flex flex-wrap items-start justify-between gap-2">
                       <div class="flex items-center gap-2">
                         <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-red-600 text-white">ROOM CLASH</span>
@@ -1594,7 +1600,7 @@ function renderOverviewDashboard() {
                               onclick="openConflictResolverModal('${escapeHtmlAttr(c.room)}', '${escapeHtmlAttr(c.day)}', ${c.periodIndex})"
                               class="h-7 px-2.5 rounded text-xs font-semibold bg-red-600 hover:bg-red-700 text-white inline-flex items-center gap-1 transition-colors cursor-pointer shrink-0">
                         <i data-lucide="wrench" class="w-3 h-3" aria-hidden="true"></i>
-                        <span>Resolve (${vacantForSlot.length} vacant rooms)</span>
+                        <span>Resolve (${allVacantForSlot.length} vacant rooms)</span>
                       </button>
                     </div>
                     <p class="text-xs text-slate-700 leading-relaxed">
@@ -1608,8 +1614,8 @@ function renderOverviewDashboard() {
                         </button>
                       `).join('')}
                     </div>
-                    <div class="text-[11px] text-emerald-800 bg-white/80 px-2.5 py-1.5 rounded border border-red-100">
-                      <strong>Recommended Resolution:</strong> Reassign one session to an available room in the same building (e.g., ${vacantForSlot.slice(0, 3).map(v => v.room).join(', ') || 'any vacant room'}).
+                    <div class="text-[11px] text-emerald-800 bg-white px-2.5 py-1.5 rounded border border-red-200">
+                      <strong>Recommended Resolution:</strong> ${escapeHtml(recText)}.
                     </div>
                   </div>
                 `;
@@ -1618,7 +1624,7 @@ function renderOverviewDashboard() {
               ${diag.instructorConflicts.map(ic => {
                 const pDef = PERIOD_DEFINITIONS[ic.periodIndex] || PERIOD_DEFINITIONS[0];
                 return `
-                  <div class="p-3 rounded-lg border border-amber-200 bg-amber-50/50 space-y-1.5">
+                  <div class="p-3 rounded-lg border border-amber-200 bg-amber-50 space-y-1.5">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                       <div class="flex items-center gap-2">
                         <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-600 text-white">FACULTY OVERLAP</span>
@@ -1667,7 +1673,7 @@ function renderOverviewDashboard() {
                 const vacantList = getVacantRoomsForSlot(s.day, pIdx, 'ALL');
                 const selectId = `overview-tba-room-${idx}`;
                 return `
-                  <div class="p-3 rounded-lg border border-amber-200 bg-amber-50/40 space-y-2">
+                  <div class="p-3 rounded-lg border border-amber-200 bg-amber-50 space-y-2">
                     <div class="flex items-start justify-between gap-2">
                       <div>
                         <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-100 text-amber-900 border border-amber-300">MISSING ROOM (TBA)</span>

@@ -276,6 +276,13 @@ function analyzeScheduleConflictsAndHealth(data) {
   const instructors = Array.isArray(data.instructors) ? data.instructors : [];
   const roomSet = new Set(Array.isArray(data.rooms) ? data.rooms : []);
 
+  // Remove any single-letter section artifacts (e.g. "M") that were previously misclassified as rooms
+  Array.from(roomSet).forEach(r => {
+    if (/^[A-Z]$/i.test(String(r).trim())) {
+      roomSet.delete(r);
+    }
+  });
+
   const roomSlotMap = new Map();
   const instructorSlotMap = new Map();
   const sectionSlotMap = new Map();
@@ -285,8 +292,19 @@ function analyzeScheduleConflictsAndHealth(data) {
   const duplicateSessions = [];
   const seenSessionSignatures = new Set();
 
+  // Normalize sessions inside instructor objects as well if they are separate instances
+  const normalizeSinglePlaceholders = (s) => {
+    if (!s || s.isDuty) return;
+    if ((!s.section || s.section === "-") && s.room && /^[A-Z]\d?$/i.test(String(s.room).trim())) {
+      s.section = String(s.room).trim().toUpperCase();
+      s.room = "TBA";
+    }
+  };
+  instructors.forEach(inst => (inst.sessions || []).forEach(normalizeSinglePlaceholders));
+
   sessions.forEach(s => {
     if (!s) return;
+    normalizeSinglePlaceholders(s);
     const pIdx = typeof s._periodIdx === "number" ? s._periodIdx : resolvePeriodIndex(s.timeSlot, false, s._periodCode);
     const safePIdx = pIdx >= 0 && pIdx < 9 ? pIdx : 0;
     const pMeta = PERIOD_META[safePIdx];
