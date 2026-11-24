@@ -293,6 +293,33 @@ function initIcons(rootElement) {
   }
 }
 
+function createEmptyScheduleData() {
+  return {
+    meta: {
+      college: 'COLLEGE OF ENGINEERING AND ARCHITECTURE',
+      department: 'No Schedule Loaded — Import an Excel/CSV Workbook',
+      period: 'No Active Term',
+      uploadedAt: new Date().toISOString()
+    },
+    instructors: [],
+    sessions: [],
+    rooms: [],
+    conflicts: [],
+    rosterSummary: [],
+    diagnostics: {
+      roomConflicts: [],
+      instructorConflicts: [],
+      sectionConflicts: [],
+      unassignedRoomSessions: [],
+      missingSectionSessions: [],
+      zeroLoadInstructors: [],
+      duplicateSessions: [],
+      missingIndividualSheets: [],
+      totalIssuesCount: 0
+    }
+  };
+}
+
 // Load cached data or fall back to preloaded sample
 function loadInitialData() {
   loadScheduleHistory();
@@ -300,13 +327,19 @@ function loadInitialData() {
   if (cached) {
     try {
       state.data = JSON.parse(cached);
-      showNotification('Loaded saved schedule from local storage', 'info');
+      if (state.data && Array.isArray(state.data.instructors) && state.data.instructors.length === 0) {
+        showNotification('Schedule workspace is empty. Import an Excel or CSV file to begin.', 'info');
+      } else {
+        showNotification('Loaded saved schedule from local storage', 'info');
+      }
     } catch (e) {
       console.warn('Failed to parse cached schedule, falling back to sample data', e);
       state.data = JSON.parse(JSON.stringify(window.SAMPLE_SCHEDULE_DATA));
     }
   } else if (window.SAMPLE_SCHEDULE_DATA) {
     state.data = JSON.parse(JSON.stringify(window.SAMPLE_SCHEDULE_DATA));
+  } else {
+    state.data = createEmptyScheduleData();
   }
 
   if (state.data) {
@@ -551,15 +584,21 @@ function recalculateConflicts(data) {
 }
 
 function setupDefaults() {
-  if (state.data.rooms && state.data.rooms.length > 0) {
+  if (state.data && state.data.rooms && state.data.rooms.length > 0) {
     state.selectedRoom = state.data.rooms[0];
+  } else {
+    state.selectedRoom = '';
   }
-  if (state.data.instructors && state.data.instructors.length > 0) {
+  if (state.data && state.data.instructors && state.data.instructors.length > 0) {
     state.selectedInstructor = state.data.instructors[0].name;
+  } else {
+    state.selectedInstructor = '';
   }
   const sections = getAllSections();
   if (sections.length > 0) {
     state.selectedSection = sections[0];
+  } else {
+    state.selectedSection = '';
   }
   const snap = getManilaTimeSnapshot();
   if (snap && snap.isAcademicDay) {
@@ -887,10 +926,12 @@ function setupEventListeners() {
 }
 
 function performResetToSampleData() {
-  safeStorageRemove('cea_schedule_data');
   safeStorageRemove('cea_schedule_history');
   state.history = [];
   state.pendingImport = null;
+  state.selectedInstructor = '';
+  state.selectedRoom = '';
+  state.selectedSection = '';
   state.roomSearchQuery = '';
   state.instructorDayFilter = 'ALL';
   state.roomDayFilter = 'ALL';
@@ -910,6 +951,8 @@ function performResetToSampleData() {
   };
 
   // Reset UI filter input elements if present
+  const instSearchEl = document.getElementById('instructor-search-input');
+  if (instSearchEl) instSearchEl.value = '';
   const roomSearchEl = document.getElementById('room-search-input');
   if (roomSearchEl) roomSearchEl.value = '';
   const masterSearchEl = document.getElementById('filter-master-search');
@@ -925,14 +968,36 @@ function performResetToSampleData() {
     window.resetSimulatedTime();
   }
 
-  state.data = JSON.parse(JSON.stringify(window.SAMPLE_SCHEDULE_DATA));
-  annotateSessionPeriods(state.data);
-  recalculateConflicts(state.data);
+  // Erase all schedule data and persist empty workspace state
+  state.data = createEmptyScheduleData();
+  safeStorageSet('cea_schedule_data', JSON.stringify(state.data));
   setupDefaults();
   updateHistoryBadgeUI();
   renderAll();
-  showNotification('Restored default CEA sample dataset and cleared local changes', 'success');
+  showNotification('Erased all schedule data. Import an Excel or CSV file to load a new schedule.', 'success');
 }
+
+window.loadPreloadedSampleDataset = function() {
+  if (!window.SAMPLE_SCHEDULE_DATA) return;
+  const previousData = state.data ? JSON.parse(JSON.stringify(state.data)) : null;
+  state.data = JSON.parse(JSON.stringify(window.SAMPLE_SCHEDULE_DATA));
+  annotateSessionPeriods(state.data);
+  recalculateConflicts(state.data);
+  safeStorageSet('cea_schedule_data', JSON.stringify(state.data));
+
+  recordScheduleHistoryEntry({
+    actionType: 'IMPORT',
+    title: 'Loaded Default CEA Sample Dataset',
+    summary: `Loaded ${state.data.instructors.length} faculty members across ${state.data.rooms.length} rooms.`,
+    source: 'Sample Dataset',
+    previousData,
+    updatedData: state.data
+  });
+
+  setupDefaults();
+  renderAll();
+  showNotification('Loaded default CEA sample dataset', 'success');
+};
 
 function syncStateToUrl() {
   try {
@@ -1505,6 +1570,31 @@ function renderOverviewDashboard() {
     diag.duplicateSessions.length;
 
   const totalConflictsCount = diag.roomConflicts.length + diag.instructorConflicts.length;
+
+  if (instructors.length === 0 && allSessions.length === 0) {
+    container.innerHTML = `
+      <div class="p-12 text-center rounded-lg border border-slate-200 bg-white shadow-2xs space-y-3">
+        <div class="w-11 h-11 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto">
+          <i data-lucide="layout-dashboard" class="w-5 h-5" aria-hidden="true"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-slate-900">Schedule Workspace Is Empty</h3>
+          <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">All schedule data has been erased. Import an Excel (.xlsx, .xls) or CSV schedule workbook to populate the dashboard, or load the sample dataset.</p>
+        </div>
+        <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
+          <button type="button" onclick="document.getElementById('open-upload-btn').click()" class="h-8 px-4 rounded-md text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+            <i data-lucide="upload" class="w-3.5 h-3.5" aria-hidden="true"></i>
+            <span>Import Schedule Workbook</span>
+          </button>
+          <button type="button" onclick="loadPreloadedSampleDataset()" class="h-8 px-3.5 rounded-md text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer">
+            Load Sample Dataset
+          </button>
+        </div>
+      </div>
+    `;
+    initIcons();
+    return;
+  }
 
   container.innerHTML = `
     <!-- 1. Top KPI Summary Cards -->
@@ -2784,7 +2874,19 @@ function renderRoomOccupancy() {
   const conflictContainer = document.getElementById('room-conflict-alert-box');
 
   if (!currentRoom) {
-    if (container) container.innerHTML = '<div class="p-8 text-center text-slate-400">No rooms available.</div>';
+    if (statsContainer) statsContainer.innerHTML = '';
+    if (conflictContainer) {
+      conflictContainer.classList.add('hidden');
+      conflictContainer.innerHTML = '';
+    }
+    if (container) {
+      container.innerHTML = `
+        <div class="p-10 text-center rounded-lg border border-slate-200 bg-white text-xs text-slate-500 shadow-2xs">
+          <div class="font-semibold text-sm text-slate-800">No Rooms Available</div>
+          <p class="mt-1">Import an Excel or CSV schedule workbook to view classroom occupancy and conflict resolution.</p>
+        </div>
+      `;
+    }
     return;
   }
 
@@ -3545,11 +3647,36 @@ function renderInstructorSchedule() {
   const faculty = state.data.instructors.find(i => i.name === currentName);
   const container = document.getElementById('instructor-timetable-container');
   const profileContainer = document.getElementById('instructor-profile-card');
+  const quickBadge = document.getElementById('instructor-quick-badge');
 
   renderInstructorDirectoryPills();
 
   if (!faculty) {
-    if (container) container.innerHTML = '<div class="p-8 text-center text-slate-400">Please select an instructor.</div>';
+    if (profileContainer) profileContainer.innerHTML = '';
+    if (quickBadge && state.data.instructors.length === 0) quickBadge.innerHTML = '';
+    if (container) {
+      container.innerHTML = `
+        <div class="p-10 text-center rounded-lg border border-slate-200 bg-white shadow-2xs space-y-3">
+          <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto">
+            <i data-lucide="file-spreadsheet" class="w-5 h-5" aria-hidden="true"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-slate-900">No Faculty Schedules Loaded</h3>
+            <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">All schedule data has been erased. Import an Excel (.xlsx, .xls) or CSV schedule workbook to populate timetables, or load the sample dataset.</p>
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <button type="button" onclick="document.getElementById('open-upload-btn').click()" class="h-8 px-4 rounded-md text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+              <i data-lucide="upload" class="w-3.5 h-3.5" aria-hidden="true"></i>
+              <span>Import Schedule Workbook</span>
+            </button>
+            <button type="button" onclick="loadPreloadedSampleDataset()" class="h-8 px-3.5 rounded-md text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer">
+              Load Sample Dataset
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    initIcons();
     return;
   }
 
@@ -4087,7 +4214,15 @@ function renderSectionSchedule() {
   }
 
   if (!currentSec) {
-    if (container) container.innerHTML = '<div class="p-8 text-center text-slate-400">No student sections available.</div>';
+    if (profileEl) profileEl.innerHTML = '';
+    if (container) {
+      container.innerHTML = `
+        <div class="p-10 text-center rounded-lg border border-slate-200 bg-white text-xs text-slate-500 shadow-2xs">
+          <div class="font-semibold text-sm text-slate-800">No Student Sections Available</div>
+          <p class="mt-1">Import an Excel or CSV schedule workbook to view student block timetables.</p>
+        </div>
+      `;
+    }
     return;
   }
 
@@ -5287,6 +5422,17 @@ function getManilaTimeSnapshot() {
 
 function getTodayScheduleBreakdown(snapshot) {
   if (!state.data || !Array.isArray(state.data.sessions)) {
+    return {
+      hasScheduleData: false,
+      ongoing: [],
+      upcoming: [],
+      ended: [],
+      allToday: [],
+      ongoingDutyCount: 0
+    };
+  }
+  const hasScheduleData = state.data.sessions.length > 0 || (state.data.instructors && state.data.instructors.length > 0);
+  if (!hasScheduleData) {
     return {
       hasScheduleData: false,
       ongoing: [],
