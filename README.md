@@ -6,8 +6,15 @@ A responsive, high-performance web application designed for universities and col
 
 ## Highlights & Features
 
-### 1. Main Screen: Instant Faculty Timetable Lookup
+### 1. Executive Overview Dashboard & Conflict Impact Analysis
+- **At-a-Glance KPI Cards:** Summarizes Total Faculty, Scheduled Classes, Active Classrooms, Available Rooms for the current period, Schedule Conflicts, and Incomplete Schedule Alerts.
+- **Conflict Impact Analysis:** Identifies room double-bookings and faculty schedule overlaps, displaying affected instructors, student blocks, overlapping rooms, and recommended vacant rooms for one-click conflict resolution.
+- **Incomplete Schedule Detection:** Automatically flags classes with unassigned rooms (`TBA`) with inline room assignment controls, missing student section codes, and zero-load faculty members.
+- **Building Utilization & Daily Distribution:** Visualizes weekly room utilization across academic buildings (`ALLIED`, `BGANNEX`, `SAL`, `GLEC`) and daily instructional load (Monday–Saturday).
+
+### 2. Main Screen: Instant Faculty Timetable Lookup & Availability Finder
 - **Student & Faculty Search-First Design:** Quickly find any faculty member's schedule by typing their surname, first name, course code, or room.
+- **Faculty Availability Finder:** Switch to **"Find Available Faculty"** to query instructors by Day, Period (`P1`–`P9`), and Employment Status (`Full-Time` / `Part-Time`), showing who is **Available / Free** (with consecutive free periods), on **Office / Consultation Duty**, or **Occupied in Class**, along with their next scheduled class.
 - **Intelligent Autocomplete:** Real-time suggestion dropdown with query token highlighting, employment status badges (`Full-Time` / `Part-Time`), course summaries, and keyboard navigation (`Up` / `Down` arrows, `Enter`, `Escape`).
 - **Quick Faculty Stepping:** Easily browse through instructors using `Prev` / `Next` buttons or direct selection.
 - **Faculty Profile Card:** Displays qualification/department, active courses, assigned classrooms, weekly class count, and office duty periods.
@@ -62,12 +69,11 @@ A responsive, high-performance web application designed for universities and col
 - **Calendar Export (`.ics`):** Export any instructor's or student section's weekly schedule to a recurring RFC 5545 `.ics` calendar file for Google Calendar, Apple Calendar, or Outlook.
 - **Shareable Deep-Link URLs:** Synchronizes the active tab, faculty member, room, and student section with URL query parameters (`?tab=...&faculty=...&room=...&section=...`) for one-click link sharing.
 
-### 9. Client-Side Excel Workbook Parser (Zero Backend Required)
-- **Dynamic File Import:** Upload any standard scheduling workbook (`.xlsx`, `.xls`, or `.csv`) using drag-and-drop or file picker.
-- **Fast Client-Side Parsing:** Powered by [SheetJS](https://sheetjs.com/), processing complex multi-sheet workbooks in browser memory in milliseconds.
-- **Smart Sheet Identification:** Automatically extracts data from `FLR-002` Individual Faculty timetable grids while safely ignoring administrative forms (`FLR-003`, `FLR-004`, `FLR-005`).
-- **Local Persistence:** Imported schedules and conflict reassignments are cached in browser `localStorage` so your data persists across page refreshes.
-- **Reset to Default:** Restore the built-in preloaded semester dataset anytime with one click.
+### 9. Staged Excel/CSV Import Preview, Validation & Schedule Change History
+- **Staged Import Preview Workflow:** Uploading a workbook (`.xlsx`, `.xls`, or `.csv`) parses and validates the file in a non-destructive preview stage first—displaying extracted counts, room/faculty conflict warnings, and incomplete entry alerts before you confirm replacing the active schedule.
+- **Multi-Format Parser Resilience:** Supports multi-sheet workbooks (Form `FLR-001` + individual `FLR-002` sheets), stacked single-sheet workbooks/CSVs (such as `sample_input.csv` with 24 stacked faculty blocks), and re-imported tabular CSV schedule exports.
+- **Schedule Change History & Rollback:** Automatically records restorable snapshots in browser storage whenever schedules are imported, rooms are reassigned, or data is reset. Click **History** in the top toolbar to review past modifications and restore any previous version with one click.
+- **Exportable Workload Reports & Security:** Export full schedules or Form `FLR-001` faculty workload analytics to CSV (hardened against spreadsheet formula injection).
 
 ### 10. Dark Mode & Accessibility
 - **Theme Toggle:** Easily switch between Light and Dark themes via the header button.
